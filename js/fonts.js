@@ -3,18 +3,24 @@
    usa una lista curada de respaldo. Categoriza en "manuscritas" e "imprenta". */
 const FONTS = (() => {
 
-  // respaldo curado (siempre funciona aunque falle la red)
-  const HAND = ['Caveat','Dancing Script','Pacifico','Shadows Into Light','Indie Flower',
-    'Patrick Hand','Kalam','Gloria Hallelujah','Architects Daughter','Homemade Apple',
-    'Reenie Beanie','Nanum Pen Script','Satisfy','Sacramento','Great Vibes','Allura',
-    'Tangerine','Cookie','Permanent Marker','Rock Salt','Covered By Your Grace','Coming Soon',
-    'Gochi Hand','Schoolbell','Just Another Hand','Nothing You Could Do','Crafty Girls',
-    'Walter Turncoat','Loved by the King','La Belle Aurore','Zeyada','Marck Script',
-    'Yellowtail','Bad Script','Caveat Brush','Shadows Into Light Two','Handlee','Neucha',
-    'Itim','Mansalva','Delius','Sriracha','Damion','Kristi','Dawning of a New Day',
-    'Cedarville Cursive','Give You Glory','Over the Rainbow','Annie Use Your Telescope',
-    'The Girl Next Door','Beth Ellen','Calligraffitti','Grand Hotel','Courgette','Lobster',
-    'Amatic SC','Caveat'];
+  // respaldo curado + ORDEN DE PRIORIDAD.
+  // Enfocado en letra MANUSCRITA REALISTA / DESPROLIJA ("fea") de cuaderno,
+  // NO en caligrafía elegante. Las primeras salen arriba por defecto.
+  const HAND = [
+    // --- desprolijas / realistas (lo que pidió el usuario) ---
+    'Shadows Into Light','Gloria Hallelujah','Homemade Apple','Reenie Beanie',
+    'Just Another Hand','Walter Turncoat','Coming Soon','Schoolbell','Gochi Hand',
+    'Crafty Girls','Covered By Your Grace','Nothing You Could Do','Waiting for the Sunrise',
+    'Loved by the King','Annie Use Your Telescope','The Girl Next Door','Beth Ellen',
+    'Give You Glory','Cedarville Cursive','Dawning of a New Day','Sue Ellen Francisco',
+    'Swanky and Moo Moo','East Sea Dokdo','Gamja Flower','Gaegu','Sunshiney','Stalemate',
+    'Short Stack','Chilanka','Mansalva','Neucha','Patrick Hand','Indie Flower',
+    'Architects Daughter','Kalam','Shadows Into Light Two','Rock Salt','Permanent Marker',
+    'Zeyada','Sriracha','Bad Script','Delius','Itim','Handlee','Caveat',
+    'Nanum Pen Script','La Belle Aurore','Over the Rainbow','Calligraffitti',
+    // --- elegantes al final (por si alguien las quiere) ---
+    'Dancing Script','Pacifico','Satisfy','Cookie','Courgette','Grand Hotel','Lobster',
+    'Great Vibes','Allura','Tangerine','Sacramento','Yellowtail','Damion','Marck Script','Amatic SC'];
   const PRINT = ['Roboto','Open Sans','Lato','Montserrat','Merriweather','Playfair Display',
     'Lora','Source Sans 3','Noto Sans','Noto Serif','Raleway','Oswald','PT Sans','PT Serif',
     'Nunito','Nunito Sans','Poppins','Inter','Work Sans','Rubik','Mulish','Karla','Bitter',
