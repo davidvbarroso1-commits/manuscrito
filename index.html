@@ -245,10 +245,14 @@
       <aside class="gen-controls">
         <div class="ctl-group">
           <h4>Contenido</h4>
-          <div class="ctl"><label>Al subir archivo</label>
-            <select id="optMode">
-              <option value="resumir">Resumir (apuntes)</option>
-              <option value="transcribir">Transcribir tal cual</option>
+          <div class="ctl"><label>Formato</label>
+            <select id="optFormat">
+              <option value="resumen">Resumen (viñetas)</option>
+              <option value="ideas">Ideas clave</option>
+              <option value="esquema">Esquema</option>
+              <option value="cornell">Método Cornell</option>
+              <option value="preguntas">Preguntas de estudio</option>
+              <option value="completo">Texto completo (transcribir)</option>
             </select>
           </div>
           <div id="dropzone" class="dropzone">
@@ -329,19 +333,29 @@
         </div>
 
         <div class="ctl-group">
-          <h4>Realismo</h4>
-          <div class="ctl"><label>Variación de presión</label>
+          <h4>Realismo <span class="muted sm">· vista previa abajo</span></h4>
+          <div class="ctl"><label>Presión</label>
             <input type="range" id="optPressure" min="0" max="100" value="55"><span class="val" id="valPressure">55</span>
           </div>
-          <div class="ctl"><label>Variación de tono</label>
+          <div class="ctl"><label>Tono</label>
             <input type="range" id="optTone" min="0" max="100" value="45"><span class="val" id="valTone">45</span>
           </div>
+          <div class="ctl"><label>Transparencia</label>
+            <input type="range" id="optTransp" min="0" max="60" value="0"><span class="val" id="valTransp">0</span>
+          </div>
           <div class="ctl"><label>Imperfección</label>
-            <input type="range" id="optJitter" min="0" max="100" value="35"><span class="val" id="valJitter">35</span>
+            <input type="range" id="optJitter" min="0" max="100" value="38"><span class="val" id="valJitter">38</span>
           </div>
-          <div class="ctl"><label>Mano (inclinación)</label>
-            <input type="range" id="optSlant" min="-12" max="12" value="-2"><span class="val" id="valSlant">-2°</span>
+          <div class="ctl"><label>Temblor de renglón</label>
+            <input type="range" id="optDrift" min="0" max="100" value="22"><span class="val" id="valDrift">22</span>
           </div>
+          <div class="ctl"><label>Manchas de tinta</label>
+            <input type="range" id="optBlots" min="0" max="100" value="10"><span class="val" id="valBlots">10</span>
+          </div>
+          <div class="ctl"><label>Inclinación</label>
+            <input type="range" id="optSlant" min="-12" max="12" value="-3"><span class="val" id="valSlant">-3°</span>
+          </div>
+          <div class="realism-pv-wrap"><canvas id="realismPreview"></canvas></div>
         </div>
 
         <div class="gen-buttons">

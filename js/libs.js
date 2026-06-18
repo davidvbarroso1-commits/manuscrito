@@ -16,13 +16,11 @@ const LIBS = (() => {
 
   async function pdfjs(){
     if (window.pdfjsLib) return window.pdfjsLib;
-    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs').catch(async()=>{
-      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js');
-    });
-    if (window.pdfjsLib){
+    // versión clásica (UMD) estable; la .mjs no define window.pdfjsLib como script normal
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js');
+    if (window.pdfjsLib)
       window.pdfjsLib.GlobalWorkerOptions.workerSrc =
         'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    }
     return window.pdfjsLib;
   }
 

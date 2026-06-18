@@ -159,7 +159,9 @@ input[type=file]{font-size:13px}
 .dropzone{border:2px dashed var(--line);border-radius:12px;padding:16px 12px;text-align:center;cursor:pointer;transition:.15s;display:flex;flex-direction:column;gap:3px;margin-bottom:8px}
 .dropzone:hover{border-color:var(--accent);background:#faf8f3}
 .dropzone.over{border-color:var(--accent);background:var(--accent-soft)}
-.font-preview{margin-top:8px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fffdf8;font-size:26px;line-height:1.2;color:var(--ink);min-height:48px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.font-preview{margin-top:8px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fffdf8;font-size:24px;line-height:1.25;color:var(--ink);min-height:48px;overflow:hidden}
+.realism-pv-wrap{margin-top:10px;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fffdf8}
+#realismPreview{display:block;width:100%}
 .gen-buttons{margin-top:6px}
 .gen-buttons .row{margin-top:8px}
 .gen-buttons .row button{flex:1}

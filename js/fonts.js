@@ -7,17 +7,18 @@ const FONTS = (() => {
   // Enfocado en letra MANUSCRITA REALISTA / DESPROLIJA ("fea") de cuaderno,
   // NO en caligrafía elegante. Las primeras salen arriba por defecto.
   const HAND = [
-    // --- desprolijas / realistas (lo que pidió el usuario) ---
-    'Shadows Into Light','Gloria Hallelujah','Homemade Apple','Reenie Beanie',
-    'Just Another Hand','Walter Turncoat','Coming Soon','Schoolbell','Gochi Hand',
-    'Crafty Girls','Covered By Your Grace','Nothing You Could Do','Waiting for the Sunrise',
-    'Loved by the King','Annie Use Your Telescope','The Girl Next Door','Beth Ellen',
-    'Give You Glory','Cedarville Cursive','Dawning of a New Day','Sue Ellen Francisco',
+    // --- cursivas conectadas y desprolijas (más parecidas a una letra real de cuaderno) ---
+    'Homemade Apple','Cedarville Cursive','Dawning of a New Day','La Belle Aurore',
+    'Reenie Beanie','Give You Glory','Beth Ellen','Nothing You Could Do',
+    'Waiting for the Sunrise','Zeyada','Bad Script',
+    // --- imprenta a mano / desprolijas ---
+    'Shadows Into Light','Gloria Hallelujah','Just Another Hand','Walter Turncoat',
+    'Coming Soon','Schoolbell','Gochi Hand','Crafty Girls','Covered By Your Grace',
+    'Annie Use Your Telescope','The Girl Next Door','Sue Ellen Francisco',
     'Swanky and Moo Moo','East Sea Dokdo','Gamja Flower','Gaegu','Sunshiney','Stalemate',
     'Short Stack','Chilanka','Mansalva','Neucha','Patrick Hand','Indie Flower',
     'Architects Daughter','Kalam','Shadows Into Light Two','Rock Salt','Permanent Marker',
-    'Zeyada','Sriracha','Bad Script','Delius','Itim','Handlee','Caveat',
-    'Nanum Pen Script','La Belle Aurore','Over the Rainbow','Calligraffitti',
+    'Sriracha','Delius','Itim','Handlee','Caveat','Nanum Pen Script','Over the Rainbow','Calligraffitti',
     // --- elegantes al final (por si alguien las quiere) ---
     'Dancing Script','Pacifico','Satisfy','Cookie','Courgette','Grand Hotel','Lobster',
     'Great Vibes','Allura','Tangerine','Sacramento','Yellowtail','Damion','Marck Script','Amatic SC'];
