@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Manuscrito — Tu letra, tus apuntes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Caveat:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ====================== TOP BAR ====================== -->
+<header class="topbar">
+  <div class="brand">
+    <svg class="brand-mark" viewBox="0 0 40 40" aria-hidden="true">
+      <path d="M7 31c4-14 7-21 9-21 1.6 0 1.4 3 1 7-.6 6-1 9 .8 9 2.4 0 4.4-5 6-11 .5-1.8 1.2-2.6 2-2.6 1.4 0 1.2 2.4 1 5.2-.2 2.6-.1 4.4 1.2 4.4 1.4 0 2.6-1.4 3.8-3.6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <div class="brand-text">
+      <strong>Manuscrito</strong>
+      <span>tu letra, tus apuntes</span>
+    </div>
+  </div>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab active" data-view="home">Inicio</button>
+    <button class="tab" data-view="capture">Estudio de letra</button>
+    <button class="tab" data-view="generate">Generar apuntes</button>
+  </nav>
+
+  <div class="profile">
+    <label class="muted sm" for="profileSel">Perfil</label>
+    <select id="profileSel" class="select-sm"></select>
+    <button id="newProfileBtn" class="btn-ghost sm" title="Nuevo perfil de caligrafía">+</button>
+  </div>
+</header>
+
+<main class="stage">
+
+  <!-- ====================== HOME ====================== -->
+  <section class="view active" id="view-home">
+    <div class="hero">
+      <h1>Convierte cualquier documento en apuntes <em>escritos a mano</em>.</h1>
+      <p class="lead">Primero captura tu caligrafía una vez. Después sube un texto, PDF, Word o foto y Manuscrito lo reescribe con <strong>tu</strong> letra, con variación de presión, tono y pequeñas imperfecciones — listo para imprimir.</p>
+      <div class="hero-actions">
+        <button class="btn-primary" data-goto="capture">① Capturar mi letra</button>
+        <button class="btn-secondary" data-goto="generate">② Generar apuntes</button>
+      </div>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <div class="card-ic">✍️</div>
+        <h3>Captura tu letra</h3>
+        <p>Dibuja en pantalla (con presión real si usas lápiz óptico) <em>o</em> imprime una plantilla, escríbela y súbela como foto.</p>
+        <div class="progress-wrap">
+          <div class="progress"><div class="progress-bar" id="homeProgBar"></div></div>
+          <span class="muted sm" id="homeProgTxt">0 / 0 glifos</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-ic">📄</div>
+        <h3>Sube documentos</h3>
+        <p>Texto, PDF, Word (.docx) o imágenes con OCR. Manuscrito extrae el texto y lo prepara para escribirlo a mano.</p>
+      </div>
+      <div class="card">
+        <div class="card-ic">🖨️</div>
+        <h3>Imprime el cuadernillo</h3>
+        <p>Hojas tamaño A4 o Carta, con renglones o cuadrícula, márgenes y agujeros simulados. Exporta a PDF o imprime directo.</p>
+      </div>
+    </div>
+
+    <div class="tip">
+      <strong>Consejo:</strong> mientras más variantes captures de cada letra (2–3 por carácter), más natural se verá el resultado. Manuscrito alterna entre ellas al escribir.
+    </div>
+  </section>
+
+  <!-- ====================== CAPTURE ====================== -->
+  <section class="view" id="view-capture">
+    <div class="subtabs">
+      <button class="subtab active" data-mode="draw">Dibujar en pantalla</button>
+      <button class="subtab" data-mode="scan">Escanear plantilla</button>
+      <button class="subtab" data-mode="notes">Apuntes → nuevo estilo</button>
+      <div class="subtabs-spacer"></div>
+      <div class="charfilter">
+        <label class="muted sm">Mostrar</label>
+        <select id="charFilter" class="select-sm">
+          <option value="all">Todo</option>
+          <option value="lower">Minúsculas</option>
+          <option value="upper">Mayúsculas</option>
+          <option value="digit">Números</option>
+          <option value="punct">Signos</option>
+          <option value="pending">Faltantes</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="capture-layout">
+      <!-- charset grid -->
+      <aside class="charset-panel">
+        <div class="charset-head">
+          <span id="charsetCount" class="muted sm">—</span>
+          <button id="exportProfileBtn" class="btn-ghost sm" title="Descargar perfil (.json)">⬇ Respaldo</button>
+          <button id="importProfileBtn" class="btn-ghost sm" title="Cargar perfil (.json)">⬆</button>
+          <input type="file" id="importProfileInput" accept="application/json" hidden>
+        </div>
+        <div class="charset-grid" id="charsetGrid"></div>
+      </aside>
+
+      <!-- DRAW mode -->
+      <div class="capture-main" id="capture-draw">
+        <div class="capture-toolbar">
+          <div class="cur-glyph">
+            Escribiendo: <b id="curGlyph">a</b>
+            <span class="muted sm" id="curGlyphHint"></span>
+          </div>
+          <div class="spacer"></div>
+          <label class="muted sm">Grosor</label>
+          <input type="range" id="brushSize" min="1.5" max="9" step="0.5" value="3.5">
+          <button id="undoBtn" class="btn-ghost sm">↶ Deshacer</button>
+          <button id="clearBtn" class="btn-ghost sm">Limpiar</button>
+        </div>
+        <div class="pad-wrap">
+          <canvas id="padGuides" class="pad-layer"></canvas>
+          <canvas id="padInk" class="pad-layer"></canvas>
+        </div>
+        <div class="capture-actions">
+          <button id="prevCharBtn" class="btn-ghost">‹ Anterior</button>
+          <button id="saveVariantBtn" class="btn-primary">Guardar variante ✓</button>
+          <button id="nextCharBtn" class="btn-ghost">Siguiente ›</button>
+        </div>
+
+        <div class="letter-scan">
+          <div class="ls-head">
+            <h4>📷 Escanear esta letra <span class="muted sm">(junta muchas de una sola foto)</span></h4>
+            <p class="muted sm">Escribe "<b id="lsChar">a</b>" muchas veces en papel (una fila o cuadrícula), toma la foto y la app separa <b>cada repetición</b> en una variante distinta.</p>
+          </div>
+          <div class="row">
+            <label class="ls-file btn-secondary" for="lsInput">📷 Subir / tomar foto</label>
+            <input type="file" id="lsInput" accept="image/*" capture="environment" hidden>
+            <label class="muted sm">Umbral</label>
+            <input type="range" id="lsThresh" min="40" max="220" value="120">
+            <label class="muted sm">Meta</label>
+            <input type="number" id="lsMeta" class="num" value="100" min="1" max="500">
+          </div>
+          <div class="ls-progress">
+            <div class="progress"><div class="progress-bar" id="lsBar"></div></div>
+            <span class="muted sm" id="lsCount">0 / 100</span>
+          </div>
+        </div>
+
+        <div class="variants">
+          <span class="muted sm">Variantes de "<b id="varChar">a</b>" <span id="varCount" class="muted sm"></span>:</span>
+          <div class="variant-strip" id="variantStrip"></div>
+        </div>
+      </div>
+
+      <!-- SCAN mode -->
+      <div class="capture-main" id="capture-scan" hidden>
+        <div class="scan-steps">
+          <div class="scan-step">
+            <h4>1. Imprime la plantilla</h4>
+            <p class="muted sm">Genera una hoja con casillas y guías. Imprímela, escribe cada letra sobre su renglón y vuelve aquí.</p>
+            <div class="row">
+              <label class="muted sm">Columnas</label>
+              <input type="number" id="tplCols" class="num" value="7" min="3" max="12">
+              <button id="genTemplateBtn" class="btn-secondary">Generar plantilla para imprimir</button>
+            </div>
+          </div>
+          <div class="scan-step">
+            <h4>2. Sube la foto</h4>
+            <p class="muted sm">Foto o escaneo de la plantilla ya escrita, con buena luz y sin sombras.</p>
+            <input type="file" id="scanInput" accept="image/*">
+          </div>
+        </div>
+
+        <div id="scanWork" hidden>
+          <h4>3. Alinea la cuadrícula</h4>
+          <p class="muted sm">Arrastra las 4 esquinas para que el marco cubra exactamente las casillas escritas.</p>
+          <div class="row">
+            <label class="muted sm">Filas</label>
+            <input type="number" id="scanRows" class="num" value="0" min="1" max="20">
+            <label class="muted sm">Columnas</label>
+            <input type="number" id="scanCols" class="num" value="7" min="3" max="12">
+            <label class="muted sm">Umbral tinta</label>
+            <input type="range" id="scanThresh" min="20" max="220" value="120">
+            <button id="scanProcessBtn" class="btn-primary">Extraer letras ›</button>
+          </div>
+          <div class="scan-canvas-wrap">
+            <canvas id="scanCanvas"></canvas>
+          </div>
+        </div>
+
+        <div id="scanAssign" hidden>
+          <h4>4. Revisa y asigna</h4>
+          <p class="muted sm">Cada casilla extraída se asigna a una letra en orden. Corrige las que hagan falta y guarda.</p>
+          <div class="assign-grid" id="assignGrid"></div>
+          <button id="scanSaveBtn" class="btn-primary">Guardar todas las letras ✓</button>
+        </div>
+      </div>
+
+      <!-- NOTES mode: foto de apuntes largos + transcripción -> nuevo tipo de letra -->
+      <div class="capture-main" id="capture-notes" hidden>
+        <div class="notes-grid">
+          <div class="scan-step">
+            <h4>1. Sube la foto de tus apuntes</h4>
+            <p class="muted sm">Una página tuya escrita a mano, lo más recta y nítida posible.</p>
+            <input type="file" id="ntInput" accept="image/*" capture="environment">
+          </div>
+          <div class="scan-step">
+            <h4>2. ¿Qué dice? — transcripción</h4>
+            <p class="muted sm">Escribe (o dicta) el mismo texto de la foto. Sirve para etiquetar cada letra detectada.</p>
+            <textarea id="ntText" rows="4" placeholder="El mismo texto que aparece en la foto…"></textarea>
+            <div class="row">
+              <button id="ntMicBtn" class="btn-secondary">🎤 Dictar por voz</button>
+              <span class="muted sm" id="ntMicStatus"></span>
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <label class="muted sm">Umbral de tinta</label>
+          <input type="range" id="ntThresh" min="40" max="220" value="120">
+          <button id="ntAnalyzeBtn" class="btn-primary">Analizar y emparejar ›</button>
+          <span class="muted sm" id="ntStatus"></span>
+        </div>
+
+        <div id="ntReview" hidden>
+          <h4>3. Revisa las letras detectadas</h4>
+          <p class="muted sm">Cada recorte se empareja en orden con tu transcripción. Corrige las que estén mal y <b>deja en blanco</b> las que sean ruido o estén partidas.</p>
+          <div class="row">
+            <label class="muted sm">Nombre del nuevo tipo de letra</label>
+            <input type="text" id="ntProfileName" placeholder="Ej. Mi letra rápida">
+            <button id="ntSaveBtn" class="btn-primary">Crear tipo de letra ✓</button>
+            <span class="muted sm" id="ntSaveInfo"></span>
+          </div>
+          <div id="ntLines"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================== GENERATE ====================== -->
+  <section class="view" id="view-generate">
+    <div class="gen-layout">
+      <aside class="gen-controls">
+        <div class="ctl-group">
+          <h4>Contenido</h4>
+          <textarea id="genText" rows="7" placeholder="Escribe o pega aquí el texto… o sube un archivo abajo."></textarea>
+          <div class="file-row">
+            <input type="file" id="docInput" accept=".txt,.md,.pdf,.docx,image/*">
+            <span class="muted sm" id="docStatus"></span>
+          </div>
+        </div>
+
+        <div class="ctl-group">
+          <h4>Papel</h4>
+          <div class="ctl"><label>Tamaño</label>
+            <select id="optPaper">
+              <option value="a4">A4</option>
+              <option value="letter">Carta</option>
+            </select>
+          </div>
+          <div class="ctl"><label>Estilo</label>
+            <select id="optRuling">
+              <option value="lined">Rayado</option>
+              <option value="college">Universitario (margen)</option>
+              <option value="grid">Cuadriculado</option>
+              <option value="blank">Blanco</option>
+            </select>
+          </div>
+          <div class="ctl"><label>Agujeros</label>
+            <select id="optHoles">
+              <option value="none">Ninguno</option>
+              <option value="3">3 anillos</option>
+              <option value="spiral">Espiral</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="ctl-group">
+          <h4>Letra</h4>
+          <div class="ctl"><label>Tamaño</label>
+            <input type="range" id="optSize" min="14" max="40" value="24"><span class="val" id="valSize">24</span>
+          </div>
+          <div class="ctl"><label>Interlineado</label>
+            <input type="range" id="optLine" min="1.3" max="3" step="0.1" value="2"><span class="val" id="valLine">2.0</span>
+          </div>
+          <div class="ctl"><label>Instrumento</label>
+            <select id="optInstrument">
+              <option value="boli-azul">Bolígrafo azul</option>
+              <option value="boli-negro">Bolígrafo negro</option>
+              <option value="lapiz">Lápiz (grafito)</option>
+              <option value="pluma">Pluma / tinta</option>
+              <option value="marcador">Marcador</option>
+              <option value="color">Lápiz de color</option>
+            </select>
+          </div>
+          <div class="ctl"><label>Color</label>
+            <input type="color" id="optColor" value="#1f3ac4">
+          </div>
+        </div>
+
+        <div class="ctl-group">
+          <h4>Realismo</h4>
+          <div class="ctl"><label>Variación de presión</label>
+            <input type="range" id="optPressure" min="0" max="100" value="55"><span class="val" id="valPressure">55</span>
+          </div>
+          <div class="ctl"><label>Variación de tono</label>
+            <input type="range" id="optTone" min="0" max="100" value="45"><span class="val" id="valTone">45</span>
+          </div>
+          <div class="ctl"><label>Imperfección</label>
+            <input type="range" id="optJitter" min="0" max="100" value="35"><span class="val" id="valJitter">35</span>
+          </div>
+          <div class="ctl"><label>Mano (inclinación)</label>
+            <input type="range" id="optSlant" min="-12" max="12" value="-2"><span class="val" id="valSlant">-2°</span>
+          </div>
+        </div>
+
+        <div class="gen-buttons">
+          <button id="genBtn" class="btn-primary block">Generar apuntes ✦</button>
+          <div class="row">
+            <button id="printBtn" class="btn-secondary">🖨️ Imprimir</button>
+            <button id="pdfBtn" class="btn-secondary">⬇ PDF</button>
+          </div>
+        </div>
+      </aside>
+
+      <div class="gen-preview" id="genPreview">
+        <div class="empty-preview" id="emptyPreview">
+          <div class="empty-ic">📝</div>
+          <p>Tus hojas aparecerán aquí.<br>Escribe o sube un documento y pulsa <b>Generar apuntes</b>.</p>
+        </div>
+        <div id="pages"></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- toast -->
+<div id="toast" class="toast"></div>
+
+<!-- overlay for busy states -->
+<div id="overlay" class="overlay" hidden><div class="spinner"></div><div id="overlayMsg">Procesando…</div></div>
+
+<!-- ====================== SCRIPTS ====================== -->
+<script src="js/db.js"></script>
+<script src="js/charset.js"></script>
+<script src="js/libs.js"></script>
+<script src="js/segment.js"></script>
+<script src="js/render.js"></script>
+<script src="js/capture.js"></script>
+<script src="js/scan.js"></script>
+<script src="js/transcribe.js"></script>
+<script src="js/generate.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
