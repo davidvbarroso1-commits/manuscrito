@@ -245,11 +245,39 @@
       <aside class="gen-controls">
         <div class="ctl-group">
           <h4>Contenido</h4>
-          <textarea id="genText" rows="7" placeholder="Escribe o pega aquí el texto… o sube un archivo abajo."></textarea>
+          <div class="ctl"><label>Al subir archivo</label>
+            <select id="optMode">
+              <option value="resumir">Resumir (apuntes)</option>
+              <option value="transcribir">Transcribir tal cual</option>
+            </select>
+          </div>
+          <div id="dropzone" class="dropzone">
+            <b>⬇ Arrastra aquí un archivo</b>
+            <span class="muted sm">PDF, Word, texto o imagen — genero los apuntes solos</span>
+          </div>
+          <textarea id="genText" rows="6" placeholder="…o escribe / pega el texto aquí."></textarea>
           <div class="file-row">
             <input type="file" id="docInput" accept=".txt,.md,.pdf,.docx,image/*">
             <span class="muted sm" id="docStatus"></span>
           </div>
+        </div>
+
+        <div class="ctl-group">
+          <h4>Tipo de letra <span class="muted sm" id="fontNote"></span></h4>
+          <div class="ctl"><label>Origen</label>
+            <select id="optFontKind">
+              <option value="hand" selected>Manuscritas (fuentes)</option>
+              <option value="print">Imprenta (fuentes)</option>
+              <option value="mia">Mi caligrafía (capturada)</option>
+            </select>
+          </div>
+          <div class="ctl" id="fontSearchRow"><label>Buscar</label>
+            <input type="text" id="optFontSearch" placeholder="Filtrar fuentes…">
+          </div>
+          <div class="ctl"><label>Fuente</label>
+            <select id="optFont"></select>
+          </div>
+          <div id="fontPreview" class="font-preview">Aa Bb Cc</div>
         </div>
 
         <div class="ctl-group">
@@ -347,6 +375,8 @@
 <script src="js/db.js"></script>
 <script src="js/charset.js"></script>
 <script src="js/libs.js"></script>
+<script src="js/fonts.js"></script>
+<script src="js/summarize.js"></script>
 <script src="js/segment.js"></script>
 <script src="js/render.js"></script>
 <script src="js/capture.js"></script>

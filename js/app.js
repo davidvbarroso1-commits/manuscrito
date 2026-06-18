@@ -23,6 +23,9 @@ const APP = (() => {
     const sel=document.getElementById('profileSel'); sel.innerHTML='';
     for(const p of profiles){ const o=document.createElement('option'); o.value=p.id; o.textContent=p.name; sel.appendChild(o); }
     sel.value=current.id;
+    // refresca la lista "Mi caligrafía" del generador si está activa
+    const k=document.getElementById('optFontKind');
+    if(window.GENERATE && GENERATE.populateFonts && k && k.value==='mia') GENERATE.populateFonts();
   }
   async function newProfile(){
     const name=prompt('Nombre del nuevo perfil de caligrafía:','Caligrafía '+(profiles.length+1));
@@ -108,7 +111,7 @@ const APP = (() => {
     CAPTURE.bind({getProfile,persist,refresh}); CAPTURE.init();
     SCAN.bind({getProfile,persist,refresh}); SCAN.init();
     TRANSCRIBE.bind({createProfile:createProfileWith, getProfile}); TRANSCRIBE.init();
-    GENERATE.bind({getProfile}); GENERATE.init();
+    GENERATE.bind({getProfile, getProfiles:()=>profiles}); GENERATE.init();
 
     // tabs
     document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>setView(t.dataset.view));
