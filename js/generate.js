@@ -345,6 +345,84 @@ const GENERATE = (() => {
     return composePages(paras, opt, eng, cfg).pages.map(p=>p.canvas);
   }
 
+  /* ---- trazos "a mano" para marcos/líneas (temblor leve) ---- */
+  function sketchLine(ctx,x0,y0,x1,y1,ink,rng,w){
+    ctx.strokeStyle=`hsla(${ink.h},${ink.s}%,${ink.l}%,0.85)`; ctx.lineWidth=w||2; ctx.lineCap='round';
+    const n=6; ctx.beginPath(); ctx.moveTo(x0,y0);
+    for(let i=1;i<=n;i++){ const t=i/n;
+      ctx.lineTo(x0+(x1-x0)*t+(rng()-0.5)*3, y0+(y1-y0)*t+(rng()-0.5)*3); }
+    ctx.stroke();
+  }
+  function sketchRect(ctx,x0,y0,x1,y1,ink,rng){
+    sketchLine(ctx,x0,y0,x1,y0,ink,rng); sketchLine(ctx,x1,y0,x1,y1,ink,rng);
+    sketchLine(ctx,x1,y1,x0,y1,ink,rng); sketchLine(ctx,x0,y1,x0,y0,ink,rng);
+  }
+  function sketchEllipse(ctx,cx,cy,rx,ry,ink,rng){
+    ctx.strokeStyle=`hsla(${ink.h},${ink.s}%,${ink.l}%,0.85)`; ctx.lineWidth=2.4; ctx.beginPath();
+    for(let i=0;i<=26;i++){ const a=i/26*Math.PI*2;
+      const x=cx+Math.cos(a)*(rx+(rng()-0.5)*4), y=cy+Math.sin(a)*(ry+(rng()-0.5)*4);
+      i?ctx.lineTo(x,y):ctx.moveTo(x,y); }
+    ctx.stroke();
+  }
+
+  /* ---- flashcards: 6 tarjetas por hoja con borde de recorte ---- */
+  function renderFlashcards(cards, opt, eng){
+    const P=PAPER[opt.paper], lineH=eng.fs*opt.line;
+    if(!cards.length) return [newPage(P).canvas];
+    const mx=60,my=70,gx=36,gy=34, cols=2, rows=3;
+    const cw=(P.w-2*mx-gx)/cols, chh=(P.h-2*my-(rows-1)*gy)/rows;
+    const pages=[];
+    for(let i=0;i<cards.length;i+=cols*rows){
+      const pg=newPage(P); const ctx=pg.ctx;
+      cards.slice(i,i+cols*rows).forEach((card,k)=>{
+        const col=k%cols,row=(k/cols)|0, x0=mx+col*(cw+gx), y0=my+row*(chh+gy);
+        ctx.save(); ctx.setLineDash([9,7]); ctx.strokeStyle='#b9c2d0'; ctx.lineWidth=1.5;
+        ctx.strokeRect(x0,y0,cw,chh); ctx.restore();
+        const qBottom=y0+chh*0.42;
+        drawBlock(ctx, card.q, {x0:x0+18,x1:x0+cw-18,top:y0+lineH*1.0,bottom:qBottom}, eng, lineH);
+        sketchLine(ctx,x0+14,qBottom+6,x0+cw-14,qBottom+6,eng.ink,eng.rng,1.6);
+        drawBlock(ctx, card.a, {x0:x0+18,x1:x0+cw-18,top:qBottom+lineH*1.05,bottom:y0+chh-12}, eng, lineH);
+      });
+      pages.push(pg);
+    }
+    return pages.map(p=>p.canvas);
+  }
+
+  /* ---- boxing: cada idea dentro de una caja dibujada a mano ---- */
+  function renderBoxing(ideas, opt, eng){
+    const P=PAPER[opt.paper], lineH=eng.fs*opt.line;
+    const ml=90,mr=80,mt=120,mb=110;
+    const pages=[]; let pg=newPage(P); let y=mt+lineH;
+    for(const idea of ideas){
+      if(y>P.h-mb-lineH*2.5){ pages.push(pg); pg=newPage(P); y=mt+lineH; }
+      const yEnd=drawBlock(pg.ctx, idea, {x0:ml+22,x1:P.w-mr-22,top:y,bottom:P.h-mb}, eng, lineH);
+      sketchRect(pg.ctx, ml, y-lineH*0.85, P.w-mr, Math.min(yEnd-lineH*0.25,P.h-mb), eng.ink, eng.rng);
+      y=yEnd+lineH*0.9;
+    }
+    pages.push(pg);
+    return pages.map(p=>p.canvas);
+  }
+
+  /* ---- mapa mental: centro + ramas radiales ---- */
+  function renderMindmap(mm, opt, eng){
+    const P=PAPER[opt.paper], lineH=eng.fs*opt.line;
+    const pg=newPage(P), ctx=pg.ctx;
+    const cx=P.w/2, cy=P.h*0.42, rx=P.w*0.15, ry=lineH*1.6;
+    sketchEllipse(ctx,cx,cy,rx,ry,eng.ink,eng.rng);
+    drawBlock(ctx, mm.center||'Tema', {x0:cx-rx+22,x1:cx+rx-14,top:cy+eng.fs*0.35,bottom:cy+ry}, eng, lineH);
+    const n=mm.branches.length||0;
+    mm.branches.forEach((b,i)=>{
+      const a=(i/Math.max(1,n))*Math.PI*2 - Math.PI/2;
+      const bx=cx+Math.cos(a)*P.w*0.335, byy=cy+Math.sin(a)*P.h*0.28;
+      sketchLine(ctx, cx+Math.cos(a)*rx*1.02, cy+Math.sin(a)*ry*1.05, bx, byy, eng.ink, eng.rng, 2.2);
+      const half=P.w*0.13;
+      const yTxt=drawBlock(ctx, b.term, {x0:bx-half,x1:bx+half,top:byy+eng.fs*0.2,bottom:byy+lineH*2}, eng, lineH);
+      sketchLine(ctx,bx-half*0.8,yTxt-lineH*0.55,bx+half*0.8,yTxt-lineH*0.55,eng.ink,eng.rng,1.5);
+      if(b.frag) drawBlock(ctx, b.frag, {x0:bx-half,x1:bx+half,top:yTxt-lineH*0.2,bottom:yTxt+lineH*2.4}, eng, lineH*0.92);
+    });
+    return [pg.canvas];
+  }
+
   function renderCornell(data, opt, eng){
     const P=PAPER[opt.paper], lineH=eng.fs*opt.line;
     const mt=130, mb=110, ml=80, mr=70, usableW=P.w-ml-mr;
@@ -367,9 +445,12 @@ const GENERATE = (() => {
     try{
       const eng=await makeEngine(opt);
       if(!eng.ok){ APP.idle(); APP.toast(eng.noGlyphs?'Esa caligrafía no tiene letras: captúrala o elige una fuente':'No se pudo preparar la letra'); return; }
-      let canvases;
-      if(opt.format==='cornell') canvases=renderCornell(SUMMARIZE.format(src,'cornell'), opt, eng);
-      else canvases=renderNormal(SUMMARIZE.format(src,opt.format), opt, eng);
+      let canvases; const data=SUMMARIZE.format(src,opt.format);
+      if(opt.format==='cornell')         canvases=renderCornell(data, opt, eng);
+      else if(opt.format==='flashcards') canvases=renderFlashcards(data, opt, eng);
+      else if(opt.format==='boxing')     canvases=renderBoxing(data, opt, eng);
+      else if(opt.format==='mapa')       canvases=renderMindmap(data, opt, eng);
+      else                               canvases=renderNormal(data, opt, eng);
       const host=document.getElementById('pages'); host.innerHTML='';
       document.getElementById('emptyPreview').style.display='none';
       lastPages=canvases.map(c=>({canvas:c})); for(const c of canvases) host.appendChild(c);

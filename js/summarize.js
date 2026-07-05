@@ -49,17 +49,75 @@ const SUMMARIZE = (() => {
     return { cues, notes, summary: (summ?cap(summ)+'.':'') };
   }
 
-  // devuelve string (la mayoría) u objeto {cues,notes,summary} para cornell
+  // esquema numerado I. A. 1.
+  function outline(text){
+    const tops=topSentences(text,0.6); const ROM=['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'];
+    return tops.map((s,i)=>{ const parts=s.split(/[,;:]/).map(clean).filter(p=>p.length>2);
+      let out=(ROM[i]||(i+1))+'. '+cap(parts[0]||clean(s));
+      const SUB=['A','B','C','D'];
+      for(let j=1;j<parts.length&&j<4;j++) out+='\n    '+SUB[j-1]+'. '+cap(parts[j]);
+      return out; }).join('\n');
+  }
+
+  // término: definición
+  function glosario(text){
+    const freq=freqOf(text), tops=topSentences(text,0.65), seen=new Set(), out=[];
+    for(const s of tops){ const t=keyTerm(s,freq); if(!t||seen.has(t)) continue; seen.add(t);
+      out.push(cap(t)+': '+clean(s)+'.'); }
+    return out.join('\n');
+  }
+
+  // método Feynman: explicación simple + dudas
+  function feynman(text){
+    const simple=topSentences(text,0.35).map(s=>'• '+clean(s)+'.').join('\n');
+    const freq=freqOf(text), seen=new Set(), dudas=[];
+    for(const s of topSentences(text,0.5)){ const t=keyTerm(s,freq); if(!t||seen.has(t)) continue; seen.add(t);
+      dudas.push('• ¿Podría explicar "'+t+'" con mis palabras?'); if(dudas.length>=6) break; }
+    return 'EXPLICACIÓN SIMPLE:\n'+simple+'\n\nPARA REPASAR:\n'+dudas.join('\n');
+  }
+
+  // tarjetas de estudio [{q,a}]
+  function flashcards(text){
+    const freq=freqOf(text), tops=topSentences(text,0.65), seen=new Set(), out=[];
+    for(const s of tops){ const t=keyTerm(s,freq); if(!t||seen.has(t)) continue; seen.add(t);
+      out.push({q:'¿Qué es / qué pasa con "'+t+'"?', a:clean(s)+'.'}); }
+    return out;
+  }
+
+  // ideas para cajas (boxing)
+  function boxes(text){ return topSentences(text,0.55).map(s=>clean(s)+'.'); }
+
+  // mapa mental {center, branches:[{term,frag}]}
+  function mindmap(text){
+    const freq=freqOf(text);
+    const terms=Object.keys(freq).sort((a,b)=>freq[b]-freq[a]);
+    const center=cap(terms[0]||'Tema');
+    const sents=sentencesOf(text); const branches=[]; const seen=new Set([terms[0]]);
+    for(const t of terms.slice(1)){ if(branches.length>=7) break; if(seen.has(t)) continue; seen.add(t);
+      const s=sents.find(x=>x.toLowerCase().includes(t)); if(!s) continue;
+      const frag=words(clean(s)).slice(0,7).join(' ');
+      branches.push({term:cap(t), frag}); }
+    return {center, branches};
+  }
+
+  // devuelve string u objeto según formato
   function format(text, fmt){
-    text=(text||'').trim(); if(!text) return fmt==='cornell'?{cues:[],notes:[],summary:''}:'';
+    text=(text||'').trim();
+    if(!text) return fmt==='cornell'?{cues:[],notes:[],summary:''}:(fmt==='flashcards'||fmt==='boxing')?[]:fmt==='mapa'?{center:'',branches:[]}:'';
     switch(fmt){
-      case 'completo':  return text;
-      case 'ideas':     return resumen(text, 0.34);
-      case 'esquema':   return esquema(text);
-      case 'preguntas': return preguntas(text);
-      case 'cornell':   return cornell(text);
+      case 'completo':   return text;
+      case 'ideas':      return resumen(text, 0.34);
+      case 'esquema':    return esquema(text);
+      case 'outline':    return outline(text);
+      case 'glosario':   return glosario(text);
+      case 'feynman':    return feynman(text);
+      case 'preguntas':  return preguntas(text);
+      case 'cornell':    return cornell(text);
+      case 'flashcards': return flashcards(text);
+      case 'boxing':     return boxes(text);
+      case 'mapa':       return mindmap(text);
       case 'resumen':
-      default:          return resumen(text, 0.5);
+      default:           return resumen(text, 0.5);
     }
   }
 
