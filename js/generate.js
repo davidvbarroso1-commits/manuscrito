@@ -29,7 +29,7 @@ const GENERATE = (() => {
     sync('optSize','valSize'); sync('optLine','valLine',x=>(+x).toFixed(1));
     sync('optPressure','valPressure'); sync('optTone','valTone'); sync('optTransp','valTransp');
     sync('optJitter','valJitter'); sync('optDrift','valDrift'); sync('optBlots','valBlots');
-    sync('optSlant','valSlant',x=>x+'°');
+    sync('optWear','valWear'); sync('optSlant','valSlant',x=>x+'°');
 
     document.getElementById('optInstrument').addEventListener('change', e=>{
       const p=INSTRUMENTS[e.target.value]; if(p) document.getElementById('optColor').value=p.color; schedulePreview();
@@ -47,7 +47,7 @@ const GENERATE = (() => {
 
     // vista previa de realismo en vivo
     ['optInstrument','optColor','optSize','optLine','optPressure','optTone','optTransp',
-     'optJitter','optDrift','optBlots','optSlant','optFontKind','optPaper'].forEach(id=>{
+     'optJitter','optDrift','optBlots','optWear','optSlant','optFontKind','optPaper'].forEach(id=>{
       const el=document.getElementById(id); if(el){ el.addEventListener('input',schedulePreview); el.addEventListener('change',schedulePreview); }
     });
 
@@ -183,8 +183,37 @@ const GENERATE = (() => {
     size:+val('optSize'), line:+val('optLine'), color:val('optColor'),
     pressure:+val('optPressure')/100, tone:+val('optTone')/100, transp:+val('optTransp')/100,
     jitter:+val('optJitter')/100, drift:+val('optDrift')/100, blots:+val('optBlots')/100,
+    wear:+(val('optWear')||45)/100,
     slant:+val('optSlant'), instr:INSTRUMENTS[val('optInstrument')]||INSTRUMENTS['boli-azul'],
     format:val('optFormat'), fontVal:val('optFont')||'', _seed:1234 }; }
+
+  /* estado de desgaste del instrumento: cada ~40-70 palabras pasa "algo":
+     lápiz → se taja (trazo fino y oscuro que se va gastando);
+     tinta → no sale bien un tramo (tenue) y se recupera poco a poco. */
+  function makeWear(opt, rng){
+    const isPencil = opt.instr.grain > 0.3;
+    const st = { sharp: 0.4+rng()*0.6, flow: 1, count: 0, next: 40+Math.round(rng()*30), widthMul:1, alphaMul:1 };
+    st.step = () => {
+      if (opt.wear <= 0){ st.widthMul=1; st.alphaMul=1; return; }
+      st.count++;
+      if (isPencil) st.sharp = Math.max(0, st.sharp - 0.006 - rng()*0.006);   // se desgasta
+      else st.flow = Math.min(1, st.flow + 0.025);                             // tinta se recupera
+      if (st.count >= st.next){
+        st.count = 0; st.next = 40 + Math.round(rng()*30);
+        if (isPencil) st.sharp = 1;                        // ¡tajó el lápiz!
+        else st.flow = 0.42 + rng()*0.22;                  // tramo de tinta pobre
+      }
+      if (isPencil){
+        st.widthMul = 1.35 - 0.6*st.sharp*opt.wear;        // recién tajado = más fino
+        st.alphaMul = 1 + (0.28*st.sharp - 0.14)*opt.wear; // recién tajado = más oscuro
+      } else {
+        st.widthMul = 0.9 + 0.1*st.flow;
+        st.alphaMul = 1 - (1-st.flow)*(0.75*opt.wear+0.25);
+      }
+    };
+    st.step();
+    return st;
+  }
 
   function mkBlot(ink,fs,opt){ return (ctx,x,y)=>{ ctx.save();
     ctx.fillStyle=`hsla(${ink.h},${ink.s}%,${Math.max(0,ink.l-8)}%,${0.45*(1-opt.transp)})`;
@@ -202,9 +231,10 @@ const GENERATE = (() => {
       const gap=fs*0.04;
       const m=document.createElement('canvas').getContext('2d'); m.font=fontStr;
       const spaceW=m.measureText(' ').width||fs*0.3;
+      const wear=makeWear(opt,rng);
       const mkItem=(ch)=>{ const w=m.measureText(ch).width;
-        return {adv:w+gap*0.4, render:(ctx,x,y)=>drawFontChar(ctx,ch,x,y,fontStr,fs,ink,opt,rng)}; };
-      return {ok:true, useFont:true, fs, spaceW, mkItem, ink, rng, blot:mkBlot(ink,fs,opt)};
+        return {adv:w+gap*0.4, render:(ctx,x,y)=>drawFontChar(ctx,ch,x,y,fontStr,fs,ink,opt,rng,wear)}; };
+      return {ok:true, useFont:true, fs, spaceW, mkItem, ink, rng, blot:mkBlot(ink,fs,opt), stepWord:wear.step};
     }
     // caligrafía capturada
     let prof=null;
@@ -213,24 +243,40 @@ const GENERATE = (() => {
     if(!prof || !Object.keys(prof.glyphs).length) return {ok:false, noGlyphs:true};
     await RENDER.preloadAll(prof.glyphs);
     const fs=fsOverride || opt.size*scale, gap=fs*0.04;
+    const wear=makeWear(opt,rng);
     const R={pressure:opt.pressure,tone:opt.tone,jitter:opt.jitter,slantDeg:opt.slant,
-      brush:opt.instr.brush,widthSpan:opt.instr.widthSpan,opacity:opt.instr.opacity*(1-opt.transp),
-      grain:opt.instr.grain,pooling:opt.instr.pooling,spacing:1,rng};
+      brush:opt.instr.brush,widthSpan:opt.instr.widthSpan,opacity:opt.instr.opacity,
+      grain:opt.instr.grain,pooling:opt.instr.pooling,spacing:1,rng,
+      transp:opt.transp, hotspot:opt.pressure };          // transparencia por-letra + presión intra-letra
+    const stepWord=()=>{ wear.step(); R.widthMul=wear.widthMul; R.alphaMul=wear.alphaMul; };
+    stepWord();
     const mkItem=(ch)=>{ const v=pickVariant(prof,ch,rng); if(!v) return {adv:fs*0.45,render:()=>{}};
       return {adv:RENDER.advance(v,fs,1)+gap, render:(ctx,x,y)=>RENDER.glyph(ctx,v,x,y,fs,ink,R)}; };
-    return {ok:true, useFont:false, fs, spaceW:fs*0.34, mkItem, ink, rng, blot:mkBlot(ink,fs,opt)};
+    return {ok:true, useFont:false, fs, spaceW:fs*0.34, mkItem, ink, rng, blot:mkBlot(ink,fs,opt), stepWord};
   }
 
-  function drawFontChar(ctx,ch,x,baseY,fontStr,fontPx,ink,opt,rng){
+  function drawFontChar(ctx,ch,x,baseY,fontStr,fontPx,ink,opt,rng,wear){
     const lJit=(rng()-0.5)*14*opt.tone;
-    const a=opt.instr.opacity*(1-rng()*0.12*opt.tone)*(1-opt.transp);
+    // transparencia aleatoria POR LETRA + desgaste del instrumento (tajado / tinta pobre)
+    const tJit=1-opt.transp*(0.35+0.65*rng());
+    const a=opt.instr.opacity*(1-rng()*0.12*opt.tone)*tJit*((wear&&wear.alphaMul)||1);
     ctx.save();
     ctx.translate(x, baseY+(rng()-0.5)*0.12*fontPx*opt.jitter);
     ctx.rotate((rng()-0.5)*0.05*opt.jitter);
     ctx.transform(1,0,Math.tan(-opt.slant*Math.PI/180),1,0,0);
     ctx.font=fontStr; ctx.textBaseline='alphabetic'; ctx.textAlign='left';
     ctx.fillStyle=`hsla(${ink.h},${ink.s}%,${clamp(ink.l+lJit,0,100)}%,${clamp(a,0,1)})`;
-    ctx.fillText(ch,0,0); ctx.restore();
+    ctx.fillText(ch,0,0);
+    // zona de MÁS presión dentro de la letra (mancha más marcada en un punto aleatorio)
+    if(opt.pressure>0.2 && rng()<0.7){
+      const w=ctx.measureText(ch).width;
+      ctx.beginPath();
+      ctx.ellipse(w*rng(), -fontPx*0.35+fontPx*0.5*rng(), w*0.4, fontPx*0.22, rng()*3, 0, 7);
+      ctx.clip();
+      ctx.fillStyle=`hsla(${ink.h},${ink.s}%,${clamp(ink.l+lJit-6,0,100)}%,${clamp(a*(0.4+0.5*opt.pressure),0,1)})`;
+      ctx.fillText(ch,0,0);
+    }
+    ctx.restore();
   }
 
   /* ---------- maquetación ---------- */
@@ -259,11 +305,16 @@ const GENERATE = (() => {
     for(const para of paras){
       if(para.blank){ nl(); continue; }
       for(const word of para.words){
+        if(eng.stepWord) eng.stepWord();                       // desgaste: tajado / tinta
         if(x>cfg.x0 && x+word.w>cfg.x1) nl();
-        if(word.w>(cfg.x1-cfg.x0)){ for(const it of word.items){ if(x+it.adv>cfg.x1) nl(); it.render(pg.ctx,x,by(x)); x+=it.adv; dirty=true; } }
-        else { let first=true; for(const it of word.items){ it.render(pg.ctx,x,by(x));
-            if(first&&opt.blots&&rng()<0.012*opt.blots) eng.blot(pg.ctx,x,by(x)); first=false; x+=it.adv; } dirty=true; }
-        x+=eng.spaceW;
+        // inclinación propia de la palabra (sesgo hacia abajo → asimetría natural)
+        const wx0=x, wSlope=((rng()-0.42)*0.055)*opt.jitter;
+        const wy=xx=>by(xx)+wSlope*(xx-wx0);
+        if(word.w>(cfg.x1-cfg.x0)){ for(const it of word.items){ if(x+it.adv>cfg.x1) nl(); it.render(pg.ctx,x,wy(x)); x+=it.adv; dirty=true; } }
+        else { let first=true; for(const it of word.items){ it.render(pg.ctx,x,wy(x));
+            if(first&&opt.blots&&rng()<0.012*opt.blots) eng.blot(pg.ctx,x,wy(x)); first=false; x+=it.adv; } dirty=true; }
+        // espacio entre palabras disparejo
+        x+=eng.spaceW*(1+(rng()-0.4)*0.5*opt.jitter);
       }
       nl();
     }
@@ -276,6 +327,7 @@ const GENERATE = (() => {
     for(const para of paras){
       if(para.blank){ y+=lineH; continue; }
       for(const word of para.words){
+        if(eng.stepWord) eng.stepWord();
         if(x>region.x0 && x+word.w>region.x1){ x=region.x0; y+=lineH; if(y>region.bottom) return y; }
         for(const it of word.items){ it.render(ctx,x,y); x+=it.adv; } x+=eng.spaceW;
       }

@@ -74,7 +74,9 @@ const RENDER = (() => {
     const slantTan = Math.tan(R.slantDeg * Math.PI/180);
     // tono por-glifo: leve cambio de claridad y alpha
     const lJit = (rng()-0.5) * 16 * R.tone;
-    const gAlpha = 1 - rng() * 0.12 * R.tone;
+    // transparencia ALEATORIA por letra (R.transp 0..0.6): unas letras más tenues que otras
+    const tJit = 1 - (R.transp||0) * (0.35 + 0.65*rng());
+    const gAlpha = (1 - rng() * 0.12 * R.tone) * tJit * (R.alphaMul||1);
     const sb = (variant.adv - (variant.inkW ?? variant.w ?? variant.adv)) / 2;
     const originX = penX + sb * fs;
     const originY = baseY + blJit;
@@ -85,11 +87,20 @@ const RENDER = (() => {
       const qL = Math.round(clamp(baseHsl.l + lJit,0,100)/4)*4;   // cuantizado → cache reutilizable
       const img = tinted(variant, hsl(baseHsl.h, baseHsl.s, qL, 1));
       ctx.save();
-      ctx.globalAlpha = gAlpha * (R.opacity ?? 1);
+      ctx.globalAlpha = clamp(gAlpha * (R.opacity ?? 1), 0, 1);
       ctx.translate(originX, originY);
       ctx.rotate(rot);
       ctx.transform(1, 0, -slantTan, 1, 0, 0);
-      ctx.drawImage(img, 0, -variant.top * sy, variant.w * sx, variant.h * sy);
+      const gw = variant.w * sx, gh = variant.h * sy, gy0 = -variant.top * sy;
+      ctx.drawImage(img, 0, gy0, gw, gh);
+      // zona de MÁS presión dentro de la letra: re-dibuja recortado en una elipse aleatoria
+      if ((R.hotspot||0) > 0.2 && rng() < 0.75){
+        ctx.beginPath();
+        ctx.ellipse(gw*rng(), gy0 + gh*rng(), gw*0.35, gh*0.28, rng()*3, 0, 7);
+        ctx.clip();
+        ctx.globalAlpha = clamp(gAlpha * (R.opacity ?? 1) * (0.45 + 0.45*R.hotspot), 0, 1);
+        ctx.drawImage(img, 0, gy0, gw, gh);
+      }
       ctx.restore();
       return advance(variant, fs, R.spacing);
     }
@@ -120,13 +131,16 @@ const RENDER = (() => {
         continue;
       }
       ctx.lineCap='round'; ctx.lineJoin='round';
+      // punto de presión propio de este trazo (zona más marcada dentro de la letra)
+      const hsT = rng(), hs = R.hotspot||0;
       for (let i=1;i<L;i++){
         const a=stroke[i-1], b=stroke[i];
         const [x0,y0]=tp(a.x,a.y), [x1,y1]=tp(b.x,b.y);
         const u = i/(L-1);
-        const pr = pressureAt(b, u, ph, R);
+        let pr = pressureAt(b, u, ph, R);
+        if (hs>0.2) pr = clamp(pr + hs*0.45*Math.exp(-Math.pow((u-hsT)/0.16,2)), 0, 1.15);
         const endProx = pooling>0 ? Math.max(0, 1 - Math.min(u,1-u)/0.18) : 0;
-        let w  = baseWidth * (0.4 + widthSpan*pr) * (1 + pooling*0.5*endProx);
+        let w  = baseWidth * (0.4 + widthSpan*pr) * (1 + pooling*0.5*endProx) * (R.widthMul||1);
         let al = gAlpha*inkAlpha(pr,R)*opacity * (1 + pooling*0.22*endProx);
         if(grain>0){ al *= 1 - grain*0.55*rng(); w *= 1 + (rng()-0.5)*grain*0.5; }
         ctx.strokeStyle = hsl(baseHsl.h, baseHsl.s, clamp(baseHsl.l+lJit,0,100), clamp(al,0,1));
