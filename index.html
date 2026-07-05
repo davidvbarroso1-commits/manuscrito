@@ -265,7 +265,22 @@
             <b>⬇ Arrastra aquí un archivo</b>
             <span class="muted sm">PDF, Word, texto o imagen — genero los apuntes solos</span>
           </div>
-          <textarea id="genText" rows="6" placeholder="…o escribe / pega el texto aquí."></textarea>
+          <div class="retouch-row">
+            <span class="muted sm">Retocar selección:</span>
+            <input type="color" id="rtColor" value="#e63946" title="Color para la selección">
+            <button id="rtColorBtn" class="btn-ghost sm" title="Pinta las palabras seleccionadas">🖍 Color</button>
+            <select id="rtInstr" class="select-sm">
+              <option value="boli-azul">Bolíg. azul</option>
+              <option value="boli-negro">Bolíg. negro</option>
+              <option value="lapiz">Lápiz</option>
+              <option value="pluma">Pluma</option>
+              <option value="marcador">Marcador</option>
+              <option value="color">Lápiz color</option>
+            </select>
+            <button id="rtInstrBtn" class="btn-ghost sm" title="Cambia el instrumento de las palabras seleccionadas">✒ Aplicar</button>
+            <button id="rtClearBtn" class="btn-ghost sm" title="Quita retoques de la selección (o de todo)">✕</button>
+          </div>
+          <textarea id="genText" rows="6" placeholder="…o escribe / pega el texto aquí. Selecciona palabras y usa los botones de arriba para darles color o instrumento distinto."></textarea>
           <div class="file-row">
             <input type="file" id="docInput" accept=".txt,.md,.pdf,.docx,image/*">
             <span class="muted sm" id="docStatus"></span>
@@ -276,7 +291,8 @@
           <h4>Tipo de letra <span class="muted sm" id="fontNote"></span></h4>
           <div class="ctl"><label>Origen</label>
             <select id="optFontKind">
-              <option value="hand" selected>Manuscritas (fuentes)</option>
+              <option value="similar" selected>⭐ Parecidas a mi letra (30)</option>
+              <option value="hand">Manuscritas (todas)</option>
               <option value="print">Imprenta (fuentes)</option>
               <option value="mia">Mi caligrafía (capturada)</option>
             </select>

@@ -41,6 +41,35 @@ const GENERATE = (() => {
     document.getElementById('docInput').addEventListener('change', e=>{ if(e.target.files[0]) handleFile(e.target.files[0]); });
     setupDropzone();
 
+    // retoques por palabra: envuelve la selección del textarea con marcas {c:..}/{i:..}
+    const OBJ_FMTS=['cornell','flashcards','boxing','mapa'];
+    function preRetouch(){
+      const fmt=val('optFormat'), ta=document.getElementById('genText');
+      if(OBJ_FMTS.includes(fmt)){ APP.toast('Los retoques funcionan en formatos de texto (Resumen, Esquema, etc.)'); return null; }
+      if(fmt!=='completo' && ta.value.trim()){
+        ta.value=SUMMARIZE.format(ta.value,fmt);
+        document.getElementById('optFormat').value='completo';
+        APP.toast('Apliqué el formato al texto. Ahora selecciona palabras y retoca.');
+      }
+      return ta;
+    }
+    function wrapSel(open,close){
+      const ta=preRetouch(); if(!ta) return;
+      const s=ta.selectionStart,e=ta.selectionEnd;
+      if(s===e){ APP.toast('Primero selecciona palabras dentro del texto'); return; }
+      ta.value=ta.value.slice(0,s)+open+ta.value.slice(s,e)+close+ta.value.slice(e);
+      ta.focus(); ta.setSelectionRange(s, e+open.length+close.length);
+    }
+    document.getElementById('rtColorBtn').addEventListener('click', ()=>wrapSel('{c:'+val('rtColor')+'}','{/c}'));
+    document.getElementById('rtInstrBtn').addEventListener('click', ()=>wrapSel('{i:'+val('rtInstr')+'}','{/i}'));
+    document.getElementById('rtClearBtn').addEventListener('click', ()=>{
+      const ta=document.getElementById('genText'); const s=ta.selectionStart,e=ta.selectionEnd;
+      const rx=/\{\/?[ci](:[^}]*)?\}/g;
+      if(s!==e){ ta.value=ta.value.slice(0,s)+ta.value.slice(s,e).replace(rx,'')+ta.value.slice(e); }
+      else ta.value=ta.value.replace(rx,'');
+      APP.toast('Retoques quitados');
+    });
+
     document.getElementById('genBtn').addEventListener('click', run);
     document.getElementById('printBtn').addEventListener('click', ()=>{ if(!lastPages.length){APP.toast('Genera los apuntes primero');return;} window.print(); });
     document.getElementById('pdfBtn').addEventListener('click', exportPDF);
@@ -77,7 +106,7 @@ const GENERATE = (() => {
       updateFontPreview(); schedulePreview(); return;
     }
     document.getElementById('fontSearchRow').style.display='';
-    const base=(kind==='hand'?fontHand:fontPrint);
+    const base=(kind==='similar'?FONTS.SIMILAR:(kind==='hand'?fontHand:fontPrint));
     const list=base.filter(f=>!q||f.toLowerCase().includes(q)).slice(0,120);
     list.forEach((f,i)=>{ const o=document.createElement('option'); o.value='font:'+f;
       o.textContent=(f===RECOMMENDED?'⭐ '+f+' (parecida a tu letra)':f);
@@ -232,8 +261,12 @@ const GENERATE = (() => {
       const m=document.createElement('canvas').getContext('2d'); m.font=fontStr;
       const spaceW=m.measureText(' ').width||fs*0.3;
       const wear=makeWear(opt,rng);
-      const mkItem=(ch)=>{ const w=m.measureText(ch).width;
-        return {adv:w+gap*0.4, render:(ctx,x,y)=>drawFontChar(ctx,ch,x,y,fontStr,fs,ink,opt,rng,wear)}; };
+      const inkCache={};
+      const inkFor=c=>inkCache[c]||(inkCache[c]=RENDER.rgbToHsl(RENDER.hexToRgb(c)));
+      const mkItem=(ch,st)=>{ const w=m.measureText(ch).width;
+        const useInk=(st&&st.c)?inkFor(st.c):ink;
+        const useInstr=(st&&st.ins)?INSTRUMENTS[st.ins]:null;
+        return {adv:w+gap*0.4, render:(ctx,x,y)=>drawFontChar(ctx,ch,x,y,fontStr,fs,useInk,opt,rng,wear,useInstr)}; };
       return {ok:true, useFont:true, fs, spaceW, mkItem, ink, rng, blot:mkBlot(ink,fs,opt), stepWord:wear.step};
     }
     // caligrafía capturada
@@ -250,16 +283,26 @@ const GENERATE = (() => {
       transp:opt.transp, hotspot:opt.pressure };          // transparencia por-letra + presión intra-letra
     const stepWord=()=>{ wear.step(); R.widthMul=wear.widthMul; R.alphaMul=wear.alphaMul; };
     stepWord();
-    const mkItem=(ch)=>{ const v=pickVariant(prof,ch,rng); if(!v) return {adv:fs*0.45,render:()=>{}};
-      return {adv:RENDER.advance(v,fs,1)+gap, render:(ctx,x,y)=>RENDER.glyph(ctx,v,x,y,fs,ink,R)}; };
+    const inkCache={};
+    const inkFor=c=>inkCache[c]||(inkCache[c]=RENDER.rgbToHsl(RENDER.hexToRgb(c)));
+    const INSTR_KEYS=['brush','widthSpan','opacity','grain','pooling'];
+    const mkItem=(ch,st)=>{ const v=pickVariant(prof,ch,rng); if(!v) return {adv:fs*0.45,render:()=>{}};
+      const useInk=(st&&st.c)?inkFor(st.c):ink;
+      const useInstr=(st&&st.ins)?INSTRUMENTS[st.ins]:null;
+      return {adv:RENDER.advance(v,fs,1)+gap, render:(ctx,x,y)=>{
+        if(useInstr){ const save={}; for(const k of INSTR_KEYS){ save[k]=R[k]; R[k]=useInstr[k]; }
+          RENDER.glyph(ctx,v,x,y,fs,useInk,R); Object.assign(R,save); }
+        else RENDER.glyph(ctx,v,x,y,fs,useInk,R);
+      }}; };
     return {ok:true, useFont:false, fs, spaceW:fs*0.34, mkItem, ink, rng, blot:mkBlot(ink,fs,opt), stepWord};
   }
 
-  function drawFontChar(ctx,ch,x,baseY,fontStr,fontPx,ink,opt,rng,wear){
+  function drawFontChar(ctx,ch,x,baseY,fontStr,fontPx,ink,opt,rng,wear,instrOv){
+    const instr=instrOv||opt.instr;
     const lJit=(rng()-0.5)*14*opt.tone;
     // transparencia aleatoria POR LETRA + desgaste del instrumento (tajado / tinta pobre)
     const tJit=1-opt.transp*(0.35+0.65*rng());
-    const a=opt.instr.opacity*(1-rng()*0.12*opt.tone)*tJit*((wear&&wear.alphaMul)||1);
+    const a=instr.opacity*(1-rng()*0.12*opt.tone)*tJit*((wear&&wear.alphaMul)||1);
     ctx.save();
     ctx.translate(x, baseY+(rng()-0.5)*0.12*fontPx*opt.jitter);
     ctx.rotate((rng()-0.5)*0.05*opt.jitter);
@@ -279,17 +322,33 @@ const GENERATE = (() => {
     ctx.restore();
   }
 
-  /* ---------- maquetación ---------- */
-  function buildParas(text, mkItem){
-    const out=[];
-    for(const para of text.replace(/\r/g,'').split('\n')){
-      if(para.trim()===''){ out.push({blank:true}); continue; }
-      const words=[];
-      for(const tok of para.split(/(\s+)/)){ if(tok===''||/^\s+$/.test(tok)) continue;
-        const items=[]; let w=0; for(const ch of tok){ const it=mkItem(ch); items.push(it); w+=it.adv; } words.push({items,w}); }
-      out.push({words});
+  /* ---------- retoques por palabra: {c:#hex}texto{/c} · {i:lapiz}texto{/i} ---------- */
+  function parseStyled(text){
+    const out=[]; let c=null, ins=null;
+    for(let i=0;i<text.length;i++){
+      const rest=text.slice(i); let m;
+      if((m=rest.match(/^\{c:(#[0-9a-fA-F]{3,8})\}/))){ c=m[1]; i+=m[0].length-1; continue; }
+      if(rest.startsWith('{/c}')){ c=null; i+=3; continue; }
+      if((m=rest.match(/^\{i:([\w-]+)\}/))){ ins=INSTRUMENTS[m[1]]?m[1]:ins; i+=m[0].length-1; continue; }
+      if(rest.startsWith('{/i}')){ ins=null; i+=3; continue; }
+      out.push({ch:text[i], c, ins});
     }
     return out;
+  }
+
+  /* ---------- maquetación ---------- */
+  function buildParas(text, mkItem){
+    const ann=parseStyled(text.replace(/\r/g,''));
+    const paras=[]; let words=[], items=[], w=0;
+    const endWord=()=>{ if(items.length){ words.push({items,w}); items=[]; w=0; } };
+    const endPara=()=>{ endWord(); paras.push(words.length?{words}:{blank:true}); words=[]; };
+    for(const a of ann){
+      if(a.ch==='\n'){ endPara(); continue; }
+      if(/\s/.test(a.ch)){ endWord(); continue; }
+      const it=mkItem(a.ch, (a.c||a.ins)?{c:a.c,ins:a.ins}:null); items.push(it); w+=it.adv;
+    }
+    endPara();
+    return paras;
   }
   function newPage(P){ const c=document.createElement('canvas'); c.width=P.w; c.height=P.h;
     c.className='page-canvas'; const cx=c.getContext('2d'); cx.fillStyle='#fffdf8'; cx.fillRect(0,0,P.w,P.h); return {canvas:c,ctx:cx}; }
@@ -308,9 +367,9 @@ const GENERATE = (() => {
         if(eng.stepWord) eng.stepWord();                       // desgaste: tajado / tinta
         if(x>cfg.x0 && x+word.w>cfg.x1) nl();
         // inclinación propia de la palabra (sesgo hacia abajo → asimetría natural)
-        const wx0=x, wSlope=((rng()-0.42)*0.055)*opt.jitter;
+        let wx0=x; const wSlope=((rng()-0.42)*0.055)*opt.jitter;
         const wy=xx=>by(xx)+wSlope*(xx-wx0);
-        if(word.w>(cfg.x1-cfg.x0)){ for(const it of word.items){ if(x+it.adv>cfg.x1) nl(); it.render(pg.ctx,x,wy(x)); x+=it.adv; dirty=true; } }
+        if(word.w>(cfg.x1-cfg.x0)){ for(const it of word.items){ if(x+it.adv>cfg.x1){ nl(); wx0=x; } it.render(pg.ctx,x,wy(x)); x+=it.adv; dirty=true; } }
         else { let first=true; for(const it of word.items){ it.render(pg.ctx,x,wy(x));
             if(first&&opt.blots&&rng()<0.012*opt.blots) eng.blot(pg.ctx,x,wy(x)); first=false; x+=it.adv; } dirty=true; }
         // espacio entre palabras disparejo

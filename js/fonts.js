@@ -30,6 +30,16 @@ const FONTS = (() => {
     'Fira Sans','Cabin','Quicksand','Josefin Sans','Manrope','DM Sans','DM Serif Display',
     'Abril Fatface','Bebas Neue','Anton','Teko','Comfortaa','Roboto Slab','Vollkorn'];
 
+  // 30 fuentes elegidas por parecido a la letra del usuario (cursiva fina,
+  // semi-conectada, desprolija, tipo apunte de cuaderno a lápiz)
+  const SIMILAR = [
+    'Homemade Apple','Cedarville Cursive','Zeyada','La Belle Aurore','Dawning of a New Day',
+    'Nothing You Could Do','Waiting for the Sunrise','Give You Glory','Beth Ellen','Reenie Beanie',
+    'Sue Ellen Francisco','Loved by the King','Over the Rainbow','Just Me Again Down Here',
+    'Annie Use Your Telescope','The Girl Next Door','Shadows Into Light','Shadows Into Light Two',
+    'Stalemate','Ruthie','Meddon','League Script','Kristi','Vibur','Caveat','Caveat Brush',
+    'Bad Script','Neucha','Mansalva','Sedgwick Ave'];
+
   let hand = null, print = null, full = false;
 
   async function load(){
@@ -88,5 +98,5 @@ const FONTS = (() => {
     return p;
   }
 
-  return { load, ensure };
+  return { load, ensure, SIMILAR };
 })();
