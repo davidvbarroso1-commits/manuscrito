@@ -278,6 +278,7 @@
               <option value="color">Lápiz color</option>
             </select>
             <button id="rtInstrBtn" class="btn-ghost sm" title="Cambia el instrumento de las palabras seleccionadas">✒ Aplicar</button>
+            <button id="rtUnderBtn" class="btn-ghost sm" title="Subraya (a mano) las palabras seleccionadas">▁ Subrayar</button>
             <button id="rtClearBtn" class="btn-ghost sm" title="Quita retoques de la selección (o de todo)">✕</button>
           </div>
           <textarea id="genText" rows="6" placeholder="…o escribe / pega el texto aquí. Selecciona palabras y usa los botones de arriba para darles color o instrumento distinto."></textarea>
@@ -304,6 +305,11 @@
             <select id="optFont"></select>
           </div>
           <div id="fontPreview" class="font-preview">Aa Bb Cc</div>
+          <div class="ctl" style="margin-top:8px"><label>Mezcla</label>
+            <button id="mixAddBtn" class="btn-ghost sm" title="Añade la fuente elegida a la mezcla">➕ Añadir</button>
+            <label class="muted sm" style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="mixUse"> usar mezcla</label>
+          </div>
+          <div id="mixChips" class="mix-chips"></div>
         </div>
 
         <div class="ctl-group">
@@ -318,7 +324,10 @@
             <select id="optRuling">
               <option value="lined">Rayado</option>
               <option value="college">Universitario (margen)</option>
-              <option value="grid">Cuadriculado</option>
+              <option value="grid4">Cuadriculado 4 mm</option>
+              <option value="grid5">Cuadriculado 5 mm</option>
+              <option value="grid6">Cuadriculado 6 mm</option>
+              <option value="grid8">Cuadriculado 8 mm</option>
               <option value="blank">Blanco</option>
             </select>
           </div>

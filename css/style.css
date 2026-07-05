@@ -157,6 +157,9 @@ input[type=file]{font-size:13px}
 .ctl .val{flex:0 0 34px;text-align:right;font-size:12.5px;color:var(--muted)}
 .file-row{display:flex;flex-direction:column;gap:6px;margin-top:8px}
 .retouch-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+.mix-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.mix-chip{display:inline-flex;align-items:center;gap:5px;background:var(--accent-soft);color:var(--accent);border-radius:99px;padding:3px 8px;font-size:12.5px;font-weight:600}
+.mix-chip button{background:none;border:none;color:var(--accent);font-weight:700;padding:0;font-size:13px;cursor:pointer}
 .retouch-row input[type=color]{width:34px;height:26px;padding:1px}
 .dropzone{border:2px dashed var(--line);border-radius:12px;padding:16px 12px;text-align:center;cursor:pointer;transition:.15s;display:flex;flex-direction:column;gap:3px;margin-bottom:8px}
 .dropzone:hover{border-color:var(--accent);background:#faf8f3}
