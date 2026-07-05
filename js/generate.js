@@ -21,6 +21,9 @@ const GENERATE = (() => {
   };
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
   const val=id=>{ const e=document.getElementById(id); return e?e.value:''; };
+  // fuentes muy delgadas → refuerzo de trazo para que se vean bien
+  const THIN_BOOST={ 'League Script':1.0, 'Stalemate':0.7, 'Kristi':0.6, 'Ruthie':0.5,
+    'Zeyada':0.35, 'La Belle Aurore':0.35, 'Dawning of a New Day':0.3, 'Meddon':0.3 };
   const tick=()=>new Promise(r=>setTimeout(r,10));
 
   function init(){
@@ -261,12 +264,13 @@ const GENERATE = (() => {
       const m=document.createElement('canvas').getContext('2d'); m.font=fontStr;
       const spaceW=m.measureText(' ').width||fs*0.3;
       const wear=makeWear(opt,rng);
+      const boost=THIN_BOOST[family]||0;
       const inkCache={};
       const inkFor=c=>inkCache[c]||(inkCache[c]=RENDER.rgbToHsl(RENDER.hexToRgb(c)));
       const mkItem=(ch,st)=>{ const w=m.measureText(ch).width;
         const useInk=(st&&st.c)?inkFor(st.c):ink;
         const useInstr=(st&&st.ins)?INSTRUMENTS[st.ins]:null;
-        return {adv:w+gap*0.4, render:(ctx,x,y)=>drawFontChar(ctx,ch,x,y,fontStr,fs,useInk,opt,rng,wear,useInstr)}; };
+        return {adv:w+gap*0.4, render:(ctx,x,y)=>drawFontChar(ctx,ch,x,y,fontStr,fs,useInk,opt,rng,wear,useInstr,boost)}; };
       return {ok:true, useFont:true, fs, spaceW, mkItem, ink, rng, blot:mkBlot(ink,fs,opt), stepWord:wear.step};
     }
     // caligrafía capturada
@@ -297,7 +301,7 @@ const GENERATE = (() => {
     return {ok:true, useFont:false, fs, spaceW:fs*0.34, mkItem, ink, rng, blot:mkBlot(ink,fs,opt), stepWord};
   }
 
-  function drawFontChar(ctx,ch,x,baseY,fontStr,fontPx,ink,opt,rng,wear,instrOv){
+  function drawFontChar(ctx,ch,x,baseY,fontStr,fontPx,ink,opt,rng,wear,instrOv,boost){
     const instr=instrOv||opt.instr;
     const lJit=(rng()-0.5)*14*opt.tone;
     // transparencia aleatoria POR LETRA + desgaste del instrumento (tajado / tinta pobre)
@@ -308,8 +312,11 @@ const GENERATE = (() => {
     ctx.rotate((rng()-0.5)*0.05*opt.jitter);
     ctx.transform(1,0,Math.tan(-opt.slant*Math.PI/180),1,0,0);
     ctx.font=fontStr; ctx.textBaseline='alphabetic'; ctx.textAlign='left';
-    ctx.fillStyle=`hsla(${ink.h},${ink.s}%,${clamp(ink.l+lJit,0,100)}%,${clamp(a,0,1)})`;
+    const fill=`hsla(${ink.h},${ink.s}%,${clamp(ink.l+lJit,0,100)}%,${clamp(a,0,1)})`;
+    ctx.fillStyle=fill;
     ctx.fillText(ch,0,0);
+    // fuente delgada: contorno extra la engrosa (League Script y similares)
+    if(boost){ ctx.strokeStyle=fill; ctx.lineWidth=fontPx*0.014*boost; ctx.lineJoin='round'; ctx.strokeText(ch,0,0); }
     // zona de MÁS presión dentro de la letra (mancha más marcada en un punto aleatorio)
     if(opt.pressure>0.2 && rng()<0.7){
       const w=ctx.measureText(ch).width;
