@@ -160,11 +160,10 @@ const CAPTURE = (() => {
     const list = prof.glyphs[curChar] || [];
     if(!list.length){ strip.innerHTML='<span class="muted sm">— sin variantes aún —</span>'; return; }
     const show=Math.min(list.length, CAP);
+    const thumbs=await Promise.all(list.slice(0,show).map(v=>thumb(v,60,54)));  // paralelo
     for(let i=0;i<show;i++){
-      const v=list[i];
       const wrap=document.createElement('div'); wrap.className='variant-thumb';
-      const c = await thumb(v, 60, 54);
-      wrap.appendChild(c);
+      wrap.appendChild(thumbs[i]);
       const del=document.createElement('button'); del.className='del'; del.textContent='×';
       del.onclick=()=>{ list.splice(i,1); if(!list.length) delete prof.glyphs[curChar];
         hooks.persist(); renderVariants(); updateLS(); hooks.refresh(); };
@@ -189,7 +188,6 @@ const CAPTURE = (() => {
     const fs=h*0.5; const baseY=h*0.66;
     const rng=RENDER.makeRng(99);
     const adv = RENDER.advance(variant, fs, 1);
-    const x = (w - adv)/2 + (variant.adv - (variant.inkW??variant.w))/2*0;
     RENDER.glyph(cx, variant, Math.max(2,(w-adv)/2), baseY, fs,
       {h:30,s:30,l:14}, {pressure:0.4,tone:0.2,jitter:0,slantDeg:0,brush:3,spacing:1,rng});
     return c;

@@ -67,21 +67,25 @@ const FONTS = (() => {
 
   // carga el archivo de la fuente y espera a que esté lista para dibujar
   const ready = new Set();
+  const pending = new Map();          // dedupe: una sola carga por familia
   function ensure(family){
     if (ready.has(family)) return Promise.resolve(true);
-    return new Promise(res => {
+    if (pending.has(family)) return pending.get(family);
+    const p = new Promise(res => {
       const href = 'https://fonts.googleapis.com/css2?family=' +
         encodeURIComponent(family).replace(/%20/g,'+') + '&display=swap';
       const link = document.createElement('link'); link.rel='stylesheet'; link.href=href;
       link.onload = () => {
-        const done = ()=>{ ready.add(family); res(true); };
+        const done = ()=>{ ready.add(family); pending.delete(family); res(true); };
         if (document.fonts && document.fonts.load)
           document.fonts.load(`32px "${family}"`).then(done, done);
         else done();
       };
-      link.onerror = () => res(false);
+      link.onerror = () => { pending.delete(family); res(false); };
       document.head.appendChild(link);
     });
+    pending.set(family, p);
+    return p;
   }
 
   return { load, ensure };

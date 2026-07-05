@@ -34,7 +34,7 @@ const APP = (() => {
     profiles.push(p); current=p; fillProfileSelect(); refresh(); CAPTURE.renderVariants();
     toast('Perfil creado: '+p.name);
   }
-  async function switchProfile(id){ current=profiles.find(p=>p.id===id)||current; refresh(); CAPTURE.renderVariants(); }
+  async function switchProfile(id){ current=profiles.find(p=>p.id===id)||current; refresh(); CAPTURE.setChar(CAPTURE.char); }
 
   // crea un perfil nuevo ya poblado (usado por "Apuntes → nuevo estilo")
   async function createProfileWith(name, glyphs){
@@ -143,3 +143,7 @@ const APP = (() => {
 })();
 
 window.addEventListener('DOMContentLoaded', APP.init);
+
+// errores globales: nunca fallar en silencio
+window.addEventListener('error', e=>{ try{ APP.idle(); APP.toast('Error: '+(e.message||'desconocido')); }catch(_){} });
+window.addEventListener('unhandledrejection', e=>{ try{ APP.idle(); APP.toast('Error: '+((e.reason&&e.reason.message)||e.reason||'desconocido')); }catch(_){} });

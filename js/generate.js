@@ -211,7 +211,7 @@ const GENERATE = (() => {
     if(opt.fontVal.startsWith('profile:')) prof=(hooks.getProfiles()||[]).find(p=>p.id===opt.fontVal.slice(8));
     prof=prof||hooks.getProfile();
     if(!prof || !Object.keys(prof.glyphs).length) return {ok:false, noGlyphs:true};
-    for(const ch in prof.glyphs) for(const v of prof.glyphs[ch]) await RENDER.preload(v);
+    await RENDER.preloadAll(prof.glyphs);
     const fs=fsOverride || opt.size*scale, gap=fs*0.04;
     const R={pressure:opt.pressure,tone:opt.tone,jitter:opt.jitter,slantDeg:opt.slant,
       brush:opt.instr.brush,widthSpan:opt.instr.widthSpan,opacity:opt.instr.opacity*(1-opt.transp),

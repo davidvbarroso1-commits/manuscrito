@@ -31,11 +31,13 @@ const RENDER = (() => {
   }
   function hsl(h,s,l,a){ return `hsla(${h},${s}%,${l}%,${a})`; }
 
-  /* image tint cache: alpha de imagen = oscuridad, se recolorea preservando esa variación tonal */
+  /* image tint cache: alpha de imagen = oscuridad, se recolorea preservando esa variación tonal.
+     El brillo se cuantiza (pasos de 4) para que el cache no crezca por glifo; tope 400 entradas. */
   const tintCache = new Map();
   function tinted(variant, color){
     const key = variant.img.length + '|' + variant.img.slice(-24) + '|' + color;
     if (tintCache.has(key)) return tintCache.get(key);
+    if (tintCache.size > 400) tintCache.clear();
     const im = variant._imgEl;            // ya precargada
     const c = document.createElement('canvas');
     c.width = im.naturalWidth; c.height = im.naturalHeight;
@@ -80,7 +82,8 @@ const RENDER = (() => {
     const sx = fs * sxv, sy = fs * syv;
 
     if (variant.type === 'image'){
-      const img = tinted(variant, hsl(baseHsl.h, baseHsl.s, clamp(baseHsl.l + lJit,0,100), 1));
+      const qL = Math.round(clamp(baseHsl.l + lJit,0,100)/4)*4;   // cuantizado → cache reutilizable
+      const img = tinted(variant, hsl(baseHsl.h, baseHsl.s, qL, 1));
       ctx.save();
       ctx.globalAlpha = gAlpha * (R.opacity ?? 1);
       ctx.translate(originX, originY);
@@ -147,5 +150,12 @@ const RENDER = (() => {
 
   function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
 
-  return { makeRng, hexToRgb, rgbToHsl, glyph, advance, preload };
+  // precarga en paralelo todas las variantes de un perfil (mucho más rápido que en serie)
+  function preloadAll(glyphs){
+    const jobs=[];
+    for(const ch in glyphs) for(const v of glyphs[ch]) if(v.type==='image'&&!v._imgEl) jobs.push(preload(v));
+    return jobs.length ? Promise.all(jobs) : Promise.resolve();
+  }
+
+  return { makeRng, hexToRgb, rgbToHsl, glyph, advance, preload, preloadAll };
 })();
