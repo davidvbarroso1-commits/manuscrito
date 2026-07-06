@@ -38,7 +38,13 @@ const FONTS = (() => {
     'Sue Ellen Francisco','Loved by the King','Over the Rainbow','Just Me Again Down Here',
     'Annie Use Your Telescope','The Girl Next Door','Shadows Into Light','Shadows Into Light Two',
     'Stalemate','Ruthie','Meddon','League Script','Kristi','Vibur','Caveat','Caveat Brush',
-    'Bad Script','Neucha','Mansalva','Sedgwick Ave'];
+    'Bad Script','Neucha','Mansalva','Sedgwick Ave',
+    // segunda tanda: cursivas feas/deshechas, trazo fino tipo lápiz apurado
+    'Petemoss','Fuggles','Square Peg','Qwitcher Grypen','Water Brush','Whisper','Splash',
+    'Smooch','Mea Culpa','Hurricane','Kolker Brush','Sassy Frass','Ruge Boogie','Oooh Baby',
+    'Moon Dance','Caramel','Cherish','Grechen Fuemen','Neonderthaw','Estonia','Vujahday Script',
+    'Babylonica','Passions Conflict','Tapestry','Updock','Twinkle Star','Praise','Love Light',
+    'Send Flowers','Island Moments','Ole','Are You Serious'];
 
   let hand = null, print = null, full = false;
 

@@ -73,10 +73,12 @@ const RENDER = (() => {
     const blJit = (rng()-0.5) * 0.18 * fs * j;          // salto de línea base
     const slantTan = Math.tan(R.slantDeg * Math.PI/180);
     // tono por-glifo: leve cambio de claridad y alpha
-    const lJit = (rng()-0.5) * 16 * R.tone;
-    // transparencia ALEATORIA por letra (R.transp 0..0.6): unas letras más tenues que otras
-    const tJit = 1 - (R.transp||0) * (0.35 + 0.65*rng());
-    const gAlpha = (1 - rng() * 0.12 * R.tone) * tJit * (R.alphaMul||1);
+    // R.smooth (disimulo) amortigua los saltos de tono/transparencia entre letras
+    const sK = 1 - (R.smooth||0);
+    const lJit = (rng()-0.5) * 16 * R.tone * (0.4+0.6*sK);
+    const tMix = 0.5 + (rng()-0.5)*sK;
+    const tJit = 1 - (R.transp||0) * (0.35 + 0.65*tMix);
+    const gAlpha = (1 - (0.5+(rng()-0.5)*sK) * 0.12 * R.tone) * tJit * (R.alphaMul||1);
     const sb = (variant.adv - (variant.inkW ?? variant.w ?? variant.adv)) / 2;
     const originX = penX + sb * fs;
     const originY = baseY + blJit;

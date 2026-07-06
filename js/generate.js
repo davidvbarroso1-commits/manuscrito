@@ -24,7 +24,15 @@ const GENERATE = (() => {
   const val=id=>{ const e=document.getElementById(id); return e?e.value:''; };
   // fuentes muy delgadas → refuerzo de trazo para que se vean bien
   const THIN_BOOST={ 'League Script':1.0, 'Stalemate':0.7, 'Kristi':0.6, 'Ruthie':0.5,
-    'Zeyada':0.35, 'La Belle Aurore':0.35, 'Dawning of a New Day':0.3, 'Meddon':0.3 };
+    'Zeyada':0.35, 'La Belle Aurore':0.35, 'Dawning of a New Day':0.3, 'Meddon':0.3,
+    // segunda tanda (casi todas hairline)
+    'Petemoss':0.9,'Fuggles':0.8,'Square Peg':0.7,'Qwitcher Grypen':0.8,'Water Brush':0.5,
+    'Whisper':0.8,'Splash':0.5,'Smooch':0.6,'Mea Culpa':0.7,'Hurricane':0.6,'Kolker Brush':0.5,
+    'Sassy Frass':0.7,'Ruge Boogie':0.6,'Oooh Baby':0.7,'Moon Dance':0.6,'Caramel':0.5,
+    'Cherish':0.6,'Grechen Fuemen':0.7,'Neonderthaw':0.7,'Estonia':0.7,'Vujahday Script':0.6,
+    'Babylonica':0.8,'Passions Conflict':0.8,'Tapestry':0.6,'Updock':0.7,'Twinkle Star':0.7,
+    'Praise':0.7,'Love Light':0.7,'Send Flowers':0.7,'Island Moments':0.7,'Ole':0.5,
+    'Are You Serious':0.7 };
   const tick=()=>new Promise(r=>setTimeout(r,10));
 
   function init(){
@@ -33,7 +41,8 @@ const GENERATE = (() => {
     sync('optSize','valSize'); sync('optLine','valLine',x=>(+x).toFixed(1));
     sync('optPressure','valPressure'); sync('optTone','valTone'); sync('optTransp','valTransp');
     sync('optJitter','valJitter'); sync('optDrift','valDrift'); sync('optBlots','valBlots');
-    sync('optWear','valWear'); sync('optSlant','valSlant',x=>x+'°');
+    sync('optWear','valWear'); sync('optSmooth','valSmooth'); sync('optFall','valFall');
+    sync('optSlant','valSlant',x=>x+'°');
 
     document.getElementById('optInstrument').addEventListener('change', e=>{
       const p=INSTRUMENTS[e.target.value]; if(p) document.getElementById('optColor').value=p.color; schedulePreview();
@@ -89,13 +98,27 @@ const GENERATE = (() => {
     });
     document.getElementById('mixUse').addEventListener('change', schedulePreview);
 
-    document.getElementById('genBtn').addEventListener('click', run);
+    document.getElementById('genBtn').addEventListener('click', ()=>run());
+    // aplicar el formato SOLO a la parte seleccionada del texto
+    document.getElementById('fmtSelBtn').addEventListener('click', async()=>{
+      const ta=document.getElementById('genText'); const s=ta.selectionStart,e=ta.selectionEnd;
+      if(s===e){ APP.toast('Selecciona primero la parte del texto en el cuadro'); return; }
+      const fmt=val('optFormat'); const parte=ta.value.slice(s,e);
+      if(['cornell','flashcards','boxing','mapa'].includes(fmt)){
+        await run(parte);                       // genera el layout solo con esa parte
+        APP.toast('Generado con la selección solamente');
+      } else {
+        ta.value=ta.value.slice(0,s)+SUMMARIZE.format(parte,fmt)+ta.value.slice(e);
+        document.getElementById('optFormat').value='completo';
+        APP.toast('Sección convertida al formato; el resto quedó igual');
+      }
+    });
     document.getElementById('printBtn').addEventListener('click', ()=>{ if(!lastPages.length){APP.toast('Genera los apuntes primero');return;} window.print(); });
     document.getElementById('pdfBtn').addEventListener('click', exportPDF);
 
     // vista previa de realismo en vivo
     ['optInstrument','optColor','optSize','optLine','optPressure','optTone','optTransp',
-     'optJitter','optDrift','optBlots','optWear','optSlant','optFontKind','optPaper'].forEach(id=>{
+     'optSmooth','optFall','optJitter','optDrift','optBlots','optWear','optSlant','optFontKind','optPaper'].forEach(id=>{
       const el=document.getElementById(id); if(el){ el.addEventListener('input',schedulePreview); el.addEventListener('change',schedulePreview); }
     });
 
@@ -242,6 +265,7 @@ const GENERATE = (() => {
     paper:val('optPaper'), ruling:val('optRuling'), holes:val('optHoles'),
     size:+val('optSize'), line:+val('optLine'), color:val('optColor'),
     pressure:+val('optPressure')/100, tone:+val('optTone')/100, transp:+val('optTransp')/100,
+    smooth:+(val('optSmooth')||45)/100, fall:+(val('optFall')||15)/100,
     jitter:+val('optJitter')/100, drift:+val('optDrift')/100, blots:+val('optBlots')/100,
     wear:+(val('optWear')||45)/100,
     slant:+val('optSlant'), instr:INSTRUMENTS[val('optInstrument')]||INSTRUMENTS['boli-azul'],
@@ -323,7 +347,7 @@ const GENERATE = (() => {
     const R={pressure:opt.pressure,tone:opt.tone,jitter:opt.jitter,slantDeg:opt.slant,
       brush:opt.instr.brush,widthSpan:opt.instr.widthSpan,opacity:opt.instr.opacity,
       grain:opt.instr.grain,pooling:opt.instr.pooling,spacing:1,rng,
-      transp:opt.transp, hotspot:opt.pressure };          // transparencia por-letra + presión intra-letra
+      transp:opt.transp, smooth:opt.smooth, hotspot:opt.pressure };   // transparencia/disimulo por letra + presión intra-letra
     const stepWord=()=>{ wear.step(); R.widthMul=wear.widthMul; R.alphaMul=wear.alphaMul; };
     stepWord();
     const inkCache={};
@@ -345,10 +369,11 @@ const GENERATE = (() => {
 
   function drawFontChar(ctx,ch,x,baseY,fontStr,fontPx,ink,opt,rng,wear,instrOv,boost){
     const instr=instrOv||opt.instr;
-    const lJit=(rng()-0.5)*14*opt.tone;
-    // transparencia aleatoria POR LETRA + desgaste del instrumento (tajado / tinta pobre)
-    const tJit=1-opt.transp*(0.35+0.65*rng());
-    const a=instr.opacity*(1-rng()*0.12*opt.tone)*tJit*((wear&&wear.alphaMul)||1);
+    // disimulo: amortigua saltos de tono/transparencia entre letras
+    const sK=1-(opt.smooth||0);
+    const lJit=(rng()-0.5)*14*opt.tone*(0.4+0.6*sK);
+    const tJit=1-opt.transp*(0.35+0.65*(0.5+(rng()-0.5)*sK));
+    const a=instr.opacity*(1-(0.5+(rng()-0.5)*sK)*0.12*opt.tone)*tJit*((wear&&wear.alphaMul)||1);
     ctx.save();
     ctx.translate(x, baseY+(rng()-0.5)*0.12*fontPx*opt.jitter);
     ctx.rotate((rng()-0.5)*0.05*opt.jitter);
@@ -409,10 +434,11 @@ const GENERATE = (() => {
   function composePages(paras, opt, eng, cfg){
     const P=PAPER[opt.paper], rng=eng.rng;
     const pages=[]; let pg=newPage(P), pageIndex=0; cfg.paint(pg.ctx,P,pageIndex);
-    let x=cfg.x0, y=cfg.top, slope=cfg.drift?slp():0, dirty=false;
-    function slp(){ return (rng()-0.5)*0.05*opt.drift; }
+    // caída de renglón: pendiente base siempre hacia abajo + temblor aleatorio
+    function slp(){ return (cfg.drift?(rng()-0.5)*0.05*opt.drift:0) + 0.035*(opt.fall||0); }
+    let x=cfg.x0, y=cfg.top, slope=slp(), dirty=false;
     function by(xx){ return y + slope*(xx-cfg.x0); }
-    function nl(){ x=cfg.x0; y+=cfg.lineH; slope=cfg.drift?slp():0;
+    function nl(){ x=cfg.x0; y+=cfg.lineH; slope=slp();
       if(y>cfg.bottom){ pages.push(pg); pageIndex++; pg=newPage(P); cfg.paint(pg.ctx,P,pageIndex); y=cfg.top; dirty=false; } }
     for(const para of paras){
       if(para.blank){ nl(); continue; }
@@ -554,8 +580,8 @@ const GENERATE = (() => {
   }
 
   /* ---------- generación principal ---------- */
-  async function run(){
-    const src=document.getElementById('genText').value;
+  async function run(srcOverride){
+    const src=(typeof srcOverride==='string'&&srcOverride)||document.getElementById('genText').value;
     if(!src.trim()){ APP.toast('Escribe, pega o arrastra un texto'); return; }
     const opt=buildOpt(); opt._seed=src.length;
     APP.busy('Componiendo…'); await tick();

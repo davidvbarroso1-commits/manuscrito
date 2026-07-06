@@ -8,20 +8,49 @@ const SUMMARIZE = (() => {
         .map(s=>s.trim()).filter(s=>s.length>12);
 
   function freqOf(text){ const f={}; for(const w of words(text)) if(!STOP.has(w)) f[w]=(f[w]||0)+1; return f; }
-  function scoreSentences(sents, freq){
-    return sents.map((s,i)=>{ const sw=words(s); let sc=0; for(const w of sw) if(freq[w]) sc+=freq[w];
-      return {s,i,sc:sc/Math.sqrt(sw.length||1)}; });
+  const contentWords = s => words(s).filter(w=>!STOP.has(w));
+
+  // bigramas de palabras de contenido → etiquetas más precisas ("pensamiento critico")
+  function bigramsOf(text){
+    const bg={};
+    for(const sent of sentencesOf(text)){
+      const cw=contentWords(sent);
+      for(let i=1;i<cw.length;i++){ const b=cw[i-1]+' '+cw[i]; bg[b]=(bg[b]||0)+1; }
+    }
+    return bg;
+  }
+  // parecido entre oraciones (evita elegir dos casi iguales)
+  function similar(a,b){
+    const A=new Set(contentWords(a)), B=new Set(contentWords(b));
+    let n=0; for(const w of A) if(B.has(w)) n++;
+    return n/Math.max(1,Math.min(A.size,B.size));
   }
   function topSentences(text, ratio){
     const sents=sentencesOf(text); if(sents.length<=3) return sents;
-    const sc=scoreSentences(sents, freqOf(text));
+    const freq=freqOf(text);
+    const scored=sents.map((s,i)=>{ const sw=words(s); let sc=0; for(const w of sw) if(freq[w]) sc+=freq[w];
+      sc=sc/Math.sqrt(sw.length||1);
+      if(i===0) sc*=1.25; else if(i<3) sc*=1.1;    // el inicio suele traer la tesis
+      return {s,i,sc}; });
     const n=Math.min(sents.length, Math.max(3, Math.round(sents.length*ratio)));
-    return sc.slice().sort((a,b)=>b.sc-a.sc).slice(0,n).sort((a,b)=>a.i-b.i).map(o=>o.s);
+    const picked=[];
+    for(const o of scored.slice().sort((a,b)=>b.sc-a.sc)){
+      if(picked.length>=n) break;
+      if(picked.some(p=>similar(p.s,o.s)>0.6)) continue;   // descarta repetidas
+      picked.push(o);
+    }
+    return picked.sort((a,b)=>a.i-b.i).map(o=>o.s);
   }
   const clean = s => s.replace(/^[\s•\-–]+/,'').replace(/[.;,\s]+$/,'');
   const cap = s => s.charAt(0).toUpperCase()+s.slice(1);
   // término clave de una oración (palabra de contenido más frecuente)
   function keyTerm(s, freq){ let best='', bv=-1; for(const w of words(s)) if(!STOP.has(w)&&(freq[w]||0)>bv){bv=freq[w];best=w;} return best; }
+  // etiqueta: bigrama frecuente dentro de la oración; si no hay, término clave
+  function labelFor(s, freq, bg){
+    const cw=contentWords(s); let best=null, bv=1;
+    for(let i=1;i<cw.length;i++){ const b=cw[i-1]+' '+cw[i]; if((bg[b]||0)>bv){bv=bg[b];best=b;} }
+    return best || keyTerm(s,freq);
+  }
 
   function resumen(text, ratio){ return topSentences(text, ratio||0.5).map(s=>'• '+clean(s)+'.').join('\n'); }
 
@@ -34,16 +63,16 @@ const SUMMARIZE = (() => {
   }
 
   function preguntas(text){
-    const freq=freqOf(text), tops=topSentences(text,0.6), seen=new Set(), out=[];
-    for(const s of tops){ const t=keyTerm(s,freq); if(!t||seen.has(t)) continue; seen.add(t);
+    const freq=freqOf(text), bg=bigramsOf(text), tops=topSentences(text,0.6), seen=new Set(), out=[];
+    for(const s of tops){ const t=labelFor(s,freq,bg); if(!t||seen.has(t)) continue; seen.add(t);
       out.push('• ¿Qué sabes sobre "'+t+'"?\n    '+clean(s)+'.'); }
     return out.join('\n');
   }
 
   function cornell(text){
-    const freq=freqOf(text), tops=topSentences(text,0.6);
+    const freq=freqOf(text), bg=bigramsOf(text), tops=topSentences(text,0.6);
     const notes=tops.map(s=>clean(s)+'.');
-    const cues=tops.map(s=>{ const t=keyTerm(s,freq); return t?('¿'+cap(t)+'?'):'•'; });
+    const cues=tops.map(s=>{ const t=labelFor(s,freq,bg); return t?('¿'+cap(t)+'?'):'•'; });
     // resumen final = 1-2 oraciones top
     const summ=topSentences(text,0.18).map(clean).join('. ');
     return { cues, notes, summary: (summ?cap(summ)+'.':'') };
@@ -61,8 +90,8 @@ const SUMMARIZE = (() => {
 
   // término: definición
   function glosario(text){
-    const freq=freqOf(text), tops=topSentences(text,0.65), seen=new Set(), out=[];
-    for(const s of tops){ const t=keyTerm(s,freq); if(!t||seen.has(t)) continue; seen.add(t);
+    const freq=freqOf(text), bg=bigramsOf(text), tops=topSentences(text,0.65), seen=new Set(), out=[];
+    for(const s of tops){ const t=labelFor(s,freq,bg); if(!t||seen.has(t)) continue; seen.add(t);
       out.push(cap(t)+': '+clean(s)+'.'); }
     return out.join('\n');
   }
@@ -70,16 +99,16 @@ const SUMMARIZE = (() => {
   // método Feynman: explicación simple + dudas
   function feynman(text){
     const simple=topSentences(text,0.35).map(s=>'• '+clean(s)+'.').join('\n');
-    const freq=freqOf(text), seen=new Set(), dudas=[];
-    for(const s of topSentences(text,0.5)){ const t=keyTerm(s,freq); if(!t||seen.has(t)) continue; seen.add(t);
+    const freq=freqOf(text), bg=bigramsOf(text), seen=new Set(), dudas=[];
+    for(const s of topSentences(text,0.5)){ const t=labelFor(s,freq,bg); if(!t||seen.has(t)) continue; seen.add(t);
       dudas.push('• ¿Podría explicar "'+t+'" con mis palabras?'); if(dudas.length>=6) break; }
     return 'EXPLICACIÓN SIMPLE:\n'+simple+'\n\nPARA REPASAR:\n'+dudas.join('\n');
   }
 
   // tarjetas de estudio [{q,a}]
   function flashcards(text){
-    const freq=freqOf(text), tops=topSentences(text,0.65), seen=new Set(), out=[];
-    for(const s of tops){ const t=keyTerm(s,freq); if(!t||seen.has(t)) continue; seen.add(t);
+    const freq=freqOf(text), bg=bigramsOf(text), tops=topSentences(text,0.65), seen=new Set(), out=[];
+    for(const s of tops){ const t=labelFor(s,freq,bg); if(!t||seen.has(t)) continue; seen.add(t);
       out.push({q:'¿Qué es / qué pasa con "'+t+'"?', a:clean(s)+'.'}); }
     return out;
   }
@@ -87,17 +116,26 @@ const SUMMARIZE = (() => {
   // ideas para cajas (boxing)
   function boxes(text){ return topSentences(text,0.55).map(s=>clean(s)+'.'); }
 
-  // mapa mental {center, branches:[{term,frag}]}
+  // mapa mental {center, branches:[{term,frag}]} — centro = tema (mejor bigrama global);
+  // ramas = sub-temas distintos, cada una con el fragmento de su mejor oración
   function mindmap(text){
-    const freq=freqOf(text);
-    const terms=Object.keys(freq).sort((a,b)=>freq[b]-freq[a]);
-    const center=cap(terms[0]||'Tema');
-    const sents=sentencesOf(text); const branches=[]; const seen=new Set([terms[0]]);
-    for(const t of terms.slice(1)){ if(branches.length>=7) break; if(seen.has(t)) continue; seen.add(t);
-      const s=sents.find(x=>x.toLowerCase().includes(t)); if(!s) continue;
-      const frag=words(clean(s)).slice(0,7).join(' ');
-      branches.push({term:cap(t), frag}); }
-    return {center, branches};
+    const freq=freqOf(text), bg=bigramsOf(text);
+    let center=null, cv=1;
+    for(const b in bg) if(bg[b]>cv){ cv=bg[b]; center=b; }
+    if(!center){ const t=Object.keys(freq).sort((a,b)=>freq[b]-freq[a])[0]; center=t||'Tema'; }
+    // agrupa las mejores oraciones por etiqueta y se queda con la mejor de cada tema
+    const groups={};
+    for(const s of topSentences(text,0.75)){
+      const lab=labelFor(s,freq,bg);
+      if(!lab||lab===center) continue;
+      const cw=contentWords(s);
+      const score=cw.reduce((a,w)=>a+(freq[w]||0),0)/Math.sqrt(cw.length||1);
+      if(!groups[lab]||score>groups[lab].score) groups[lab]={s,score};
+    }
+    const branches=Object.keys(groups)
+      .sort((a,b)=>groups[b].score-groups[a].score).slice(0,7)
+      .map(lab=>({term:cap(lab), frag:contentWords(clean(groups[lab].s)).slice(0,8).join(' ')}));
+    return {center:cap(center), branches};
   }
 
   // devuelve string u objeto según formato

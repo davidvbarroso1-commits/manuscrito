@@ -246,6 +246,7 @@
         <div class="ctl-group">
           <h4>Contenido</h4>
           <div class="ctl"><label>Formato</label>
+            <button id="fmtSelBtn" class="btn-ghost sm" title="Aplica el formato elegido solo a la parte del texto que selecciones" style="order:2">✂ Solo selección</button>
             <select id="optFormat">
               <option value="resumen">Resumen (viñetas)</option>
               <option value="ideas">Ideas clave</option>
@@ -292,7 +293,7 @@
           <h4>Tipo de letra <span class="muted sm" id="fontNote"></span></h4>
           <div class="ctl"><label>Origen</label>
             <select id="optFontKind">
-              <option value="similar" selected>⭐ Parecidas a mi letra (30)</option>
+              <option value="similar" selected>⭐ Parecidas a mi letra</option>
               <option value="hand">Manuscritas (todas)</option>
               <option value="print">Imprenta (fuentes)</option>
               <option value="mia">Mi caligrafía (capturada)</option>
@@ -373,6 +374,12 @@
           </div>
           <div class="ctl"><label>Transparencia</label>
             <input type="range" id="optTransp" min="0" max="60" value="0"><span class="val" id="valTransp">0</span>
+          </div>
+          <div class="ctl"><label>Disimulo de tinta</label>
+            <input type="range" id="optSmooth" min="0" max="100" value="45"><span class="val" id="valSmooth">45</span>
+          </div>
+          <div class="ctl"><label>Caída de renglón</label>
+            <input type="range" id="optFall" min="0" max="100" value="15"><span class="val" id="valFall">15</span>
           </div>
           <div class="ctl"><label>Imperfección</label>
             <input type="range" id="optJitter" min="0" max="100" value="38"><span class="val" id="valJitter">38</span>
