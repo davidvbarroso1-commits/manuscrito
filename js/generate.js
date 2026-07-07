@@ -5,7 +5,8 @@ const GENERATE = (() => {
   function bind(h){ hooks=Object.assign(hooks,h); }
   let lastPages = [];
   let fontHand = [], fontPrint = [];
-  let mixList = [];   // fuentes elegidas por el usuario para mezclar
+  let mixList = [];        // fuentes elegidas por el usuario para mezclar
+  let mixOff = new Set();  // fuentes de la mezcla APAGADAS (clic en el chip para alternar)
   const RECOMMENDED = 'Homemade Apple';   // la más parecida a una letra real desprolija
 
   const PAPER = {
@@ -32,7 +33,32 @@ const GENERATE = (() => {
     'Cherish':0.6,'Grechen Fuemen':0.7,'Neonderthaw':0.7,'Estonia':0.7,'Vujahday Script':0.6,
     'Babylonica':0.8,'Passions Conflict':0.8,'Tapestry':0.6,'Updock':0.7,'Twinkle Star':0.7,
     'Praise':0.7,'Love Light':0.7,'Send Flowers':0.7,'Island Moments':0.7,'Ole':0.5,
-    'Are You Serious':0.7 };
+    'Are You Serious':0.7,
+    // tercera tanda
+    'Ms Madi':0.5,'My Soul':0.7,'Lovers Quarrel':0.8,'Dr Sugiyama':0.7,'Miss Fajardose':0.8,
+    'Mr Bedfort':0.6,'Mrs Sheppards':0.7,'Monsieur La Doulaise':0.8,'Jim Nightshade':0.6,
+    'Meie Script':0.6,'Redressed':0.5,'Aguafina Script':0.6,'Felipa':0.5,'Bilbo':0.6,
+    'Bilbo Swash Caps':0.6,'Euphoria Script':0.7,'Engagement':0.7,'Devonshire':0.7,'Condiment':0.5 };
+
+  // errores plausibles por letra (para tachones: la palabra "mal escrita")
+  const ERROR_MAP={a:'o',o:'a',e:'i',i:'e',u:'v',v:'u',n:'m',m:'n',r:'n',s:'z',z:'s',
+    c:'s',b:'d',d:'b',p:'q',q:'p',t:'l',l:'t',g:'j',j:'g',h:'b',y:'i',f:'t',k:'c',w:'v',x:'s',
+    'á':'a','é':'e','í':'i','ó':'o','ú':'u','ñ':'n'};
+  function mutateChars(chars,rng){
+    const out=chars.slice(); const L=out.length;
+    const nMut=L>7?2:1;
+    for(let m=0;m<nMut;m++){
+      const op=Math.floor(rng()*4);
+      const i=1+Math.floor(rng()*Math.max(1,L-2));
+      if(op===0){ // sustituye por letra parecida (respeta mayúscula)
+        const lo=out[i].toLowerCase(), rep=ERROR_MAP[lo];
+        if(rep) out[i]=(out[i]===lo)?rep:rep.toUpperCase();
+      } else if(op===1 && i<out.length-1){ const t=out[i]; out[i]=out[i+1]; out[i+1]=t; } // intercambia
+      else if(op===2){ out.splice(i,0,out[i]); }   // duplica
+      else if(op===3 && out.length>3){ out.splice(i,1); } // omite
+    }
+    return out;
+  }
   const tick=()=>new Promise(r=>setTimeout(r,10));
 
   function init(){
@@ -85,8 +111,10 @@ const GENERATE = (() => {
       APP.toast('Retoques quitados');
     });
 
-    // mezcla de fuentes elegidas por el usuario
-    try{ mixList=JSON.parse(localStorage.getItem('manuscrito_mix')||'[]'); }catch(e){ mixList=[]; }
+    // mezcla de fuentes elegidas por el usuario (si no hay guardada → las 16 predeterminadas)
+    try{ mixList=JSON.parse(localStorage.getItem('manuscrito_mix')||'null')||FONTS.DEFAULT_MIX.slice(); }
+    catch(e){ mixList=FONTS.DEFAULT_MIX.slice(); }
+    try{ mixOff=new Set(JSON.parse(localStorage.getItem('manuscrito_mixoff')||'[]')); }catch(e){ mixOff=new Set(); }
     renderMixChips();
     document.getElementById('mixAddBtn').addEventListener('click', ()=>{
       const v=val('optFont');
@@ -98,6 +126,7 @@ const GENERATE = (() => {
       APP.toast(fam+' añadida a la mezcla ('+mixList.length+')');
     });
     document.getElementById('mixUse').addEventListener('change', schedulePreview);
+    const sb=document.getElementById('saveSetBtn'); if(sb) sb.addEventListener('click', saveSettings);
 
     document.getElementById('genBtn').addEventListener('click', ()=>run());
     // aplicar el formato SOLO a la parte seleccionada del texto
@@ -123,20 +152,66 @@ const GENERATE = (() => {
       const el=document.getElementById(id); if(el){ el.addEventListener('input',schedulePreview); el.addEventListener('change',schedulePreview); }
     });
 
-    loadFontLibrary();
+    loadFontLibrary().then(()=>{
+      loadSettings();                             // restaura ajustes guardados
+      // si hay mezcla activa (p. ej. las 16 predeterminadas), enciéndela
+      if(!localStorage.getItem('manuscrito_settings') && activeMix().length>=2)
+        document.getElementById('mixUse').checked=true;
+    });
   }
   function debounce(fn,ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; }
 
-  function saveMix(){ try{ localStorage.setItem('manuscrito_mix',JSON.stringify(mixList)); }catch(e){} renderMixChips(); }
+  function saveMix(){ try{ localStorage.setItem('manuscrito_mix',JSON.stringify(mixList));
+    localStorage.setItem('manuscrito_mixoff',JSON.stringify([...mixOff])); }catch(e){} renderMixChips(); }
   function renderMixChips(){
     const host=document.getElementById('mixChips'); if(!host) return;
     host.innerHTML='';
-    mixList.forEach((f,i)=>{ const chip=document.createElement('span'); chip.className='mix-chip';
+    mixList.forEach((f,i)=>{ const chip=document.createElement('span');
+      chip.className='mix-chip'+(mixOff.has(f)?' off':'');
       chip.style.fontFamily=`"${f}", cursive`; chip.textContent=f+' ';
+      chip.title='Clic: activar/desactivar en la mezcla · ×: quitar';
+      chip.onclick=e=>{ if(e.target.tagName==='BUTTON') return;
+        mixOff.has(f)?mixOff.delete(f):mixOff.add(f); saveMix(); schedulePreview(); };
       const del=document.createElement('button'); del.textContent='×';
-      del.onclick=()=>{ mixList.splice(i,1); saveMix(); schedulePreview(); };
+      del.onclick=()=>{ mixList.splice(i,1); mixOff.delete(f); saveMix(); schedulePreview(); };
       chip.appendChild(del); host.appendChild(chip); });
     if(!mixList.length) host.innerHTML='<span class="muted sm">— añade 2 o más fuentes y marca "usar mezcla" —</span>';
+  }
+  function activeMix(){ return mixList.filter(f=>!mixOff.has(f)); }
+
+  /* ---------- guardado total de ajustes ---------- */
+  const SETTINGS_IDS=['optPaper','optRuling','optHoles','optSize','optLine','optInstrument','optColor',
+    'optFormat','optFontKind','optFont','optFontSearch','optPressure','optTone','optTransp','optSmooth',
+    'optFall','optJitter','optDrift','optBlots','optWear','optRetrace','optStrikes','optSlant'];
+  function saveSettings(){
+    const s={};
+    SETTINGS_IDS.forEach(id=>{ const e=document.getElementById(id); if(e) s[id]=e.value; });
+    s._mixUse=document.getElementById('mixUse').checked;
+    try{ localStorage.setItem('manuscrito_settings',JSON.stringify(s)); }catch(e){}
+    saveMix();   // también persiste mezcla + apagadas
+    APP.toast('Todos los ajustes guardados 💾');
+  }
+  function loadSettings(){
+    let s=null; try{ s=JSON.parse(localStorage.getItem('manuscrito_settings')||'null'); }catch(e){}
+    if(!s) return;
+    // primero el grupo de fuente (repobla la lista), luego el resto
+    const kind=document.getElementById('optFontKind');
+    if(s.optFontKind){ kind.value=s.optFontKind; }
+    populateFonts();
+    SETTINGS_IDS.forEach(id=>{ if(id==='optFontKind'||s[id]===undefined) return;
+      const e=document.getElementById(id); if(!e) return;
+      if(id==='optFont'){
+        let o=[...e.options].find(o=>o.value===s.optFont);
+        if(!o && s.optFont && s.optFont.startsWith('font:')){   // fuente fuera de la lista visible
+          o=document.createElement('option'); o.value=s.optFont; o.textContent=s.optFont.slice(5);
+          o.style.fontFamily=`"${s.optFont.slice(5)}", cursive`; e.appendChild(o); FONTS.ensure(s.optFont.slice(5));
+        }
+        if(o) e.value=s.optFont;
+      } else e.value=s[id];
+      e.dispatchEvent(new Event('input'));   // sincroniza etiquetas de sliders
+    });
+    if(typeof s._mixUse==='boolean') document.getElementById('mixUse').checked=s._mixUse;
+    updateFontPreview(); schedulePreview();
   }
 
   /* ---------- biblioteca de fuentes ---------- */
@@ -272,7 +347,7 @@ const GENERATE = (() => {
     retrace:+(val('optRetrace')||12)/100, strikes:+(val('optStrikes')||8)/100,
     slant:+val('optSlant'), instr:INSTRUMENTS[val('optInstrument')]||INSTRUMENTS['boli-azul'],
     format:val('optFormat'), fontVal:val('optFont')||'',
-    mix:(document.getElementById('mixUse')&&document.getElementById('mixUse').checked&&mixList.length>=2)?mixList.slice():null,
+    mix:(document.getElementById('mixUse')&&document.getElementById('mixUse').checked&&activeMix().length>=2)?activeMix():null,
     _seed:1234 }; }
 
   /* estado de desgaste del instrumento: cada ~40-70 palabras pasa "algo":
@@ -324,11 +399,21 @@ const GENERATE = (() => {
       const wear=makeWear(opt,rng);
       const inkCache={};
       const inkFor=c=>inkCache[c]||(inkCache[c]=RENDER.rgbToHsl(RENDER.hexToRgb(c)));
-      // estado por palabra: fuente de la mezcla + tamaño levemente distinto
+      // estado por palabra: fuente de la mezcla (nunca repite la anterior) + tamaño levemente distinto
       let curFam=families[0], wordScale=1;
-      const onWord=()=>{ curFam=families[Math.floor(rng()*families.length)%families.length];
+      const onWord=()=>{
+        if(families.length>1){ const prev=curFam;
+          do{ curFam=families[Math.floor(rng()*families.length)%families.length]; }while(curFam===prev); }
         wordScale=1+(rng()-0.5)*0.09*opt.jitter; };
       onWord();
+      // fuente para CORRECCIONES de tachón: otra de la mezcla, o una alternativa de SIMILAR
+      const altFam=FONTS.SIMILAR.find(f=>!families.includes(f))||families[0];
+      await FONTS.ensure(altFam);
+      const beginAlt=()=>{
+        if(families.length>1){ const opts=families.filter(f=>f!==curFam);
+          curFam=opts[Math.floor(rng()*opts.length)%opts.length]; }
+        else curFam=altFam;
+      };
       const mkItem=(ch,st)=>{
         const fam=curFam, fsW=fs*wordScale, fstr=`${fsW}px "${fam}", cursive`;
         m.font=fstr; const w=m.measureText(ch).width;
@@ -336,7 +421,7 @@ const GENERATE = (() => {
         const useInstr=(st&&st.ins)?INSTRUMENTS[st.ins]:null;
         const boost=THIN_BOOST[fam]||0;
         return {adv:w+gap*0.4, render:(ctx,x,y)=>drawFontChar(ctx,ch,x,y,fstr,fsW,useInk,opt,rng,wear,useInstr,boost)}; };
-      return {ok:true, useFont:true, fs, spaceW, mkItem, onWord, inkFor, ink, rng, blot:mkBlot(ink,fs,opt), stepWord:wear.step};
+      return {ok:true, useFont:true, fs, spaceW, mkItem, onWord, beginAlt, inkFor, ink, rng, blot:mkBlot(ink,fs,opt), stepWord:wear.step};
     }
     // caligrafía capturada
     let prof=null;
@@ -387,8 +472,11 @@ const GENERATE = (() => {
     const fill=`hsla(${ink.h},${ink.s}%,${clamp(ink.l+lJit,0,100)}%,${clamp(a,0,1)})`;
     ctx.fillStyle=fill;
     ctx.fillText(ch,0,0);
-    // fuente delgada: contorno extra la engrosa (League Script y similares)
-    if(boost){ ctx.strokeStyle=fill; ctx.lineWidth=fontPx*0.014*boost; ctx.lineJoin='round'; ctx.strokeText(ch,0,0); }
+    // peso de trazo variable por presión (cada letra pesa distinto, como pluma real)
+    const pr=0.5+(rng()-0.5)*opt.pressure;
+    ctx.strokeStyle=fill; ctx.lineJoin='round';
+    ctx.lineWidth=fontPx*(0.006*(0.3+pr) + 0.014*(boost||0));
+    ctx.strokeText(ch,0,0);
     // repintado: segunda pasada levemente corrida
     if(opt.retrace>0 && rng()<opt.retrace*0.3){
       ctx.globalAlpha=0.75;
@@ -434,7 +522,7 @@ const GENERATE = (() => {
       if(/\s/.test(a.ch)){ endWord(); continue; }
       if(!items.length && onWord) onWord();           // inicio de palabra: fuente/tamaño de esta palabra
       if(a.u) wu=true; if(a.c&&!wc) wc=a.c;
-      const it=mkItem(a.ch, (a.c||a.ins)?{c:a.c,ins:a.ins}:null); items.push(it); w+=it.adv;
+      const it=mkItem(a.ch, (a.c||a.ins)?{c:a.c,ins:a.ins}:null); it.ch=a.ch; items.push(it); w+=it.adv;
     }
     endPara();
     return paras;
@@ -445,35 +533,59 @@ const GENERATE = (() => {
   function composePages(paras, opt, eng, cfg){
     const P=PAPER[opt.paper], rng=eng.rng;
     const pages=[]; let pg=newPage(P), pageIndex=0; cfg.paint(pg.ctx,P,pageIndex);
-    // caída de renglón: pendiente base siempre hacia abajo + temblor aleatorio
-    function slp(){ return (cfg.drift?(rng()-0.5)*0.05*opt.drift:0) + 0.035*(opt.fall||0); }
+    // caída de renglón: mayormente hacia abajo, a veces sube un poco; + temblor aleatorio
+    function slp(){ const dir = rng()<0.72 ? 1 : -(0.35+rng()*0.45);
+      return (cfg.drift?(rng()-0.5)*0.05*opt.drift:0) + 0.035*(opt.fall||0)*dir; }
+    // onda suave dentro del renglón (la mano no escribe en línea recta)
+    let wavePh=rng()*7, waveF=(0.5+rng())*Math.PI*2/Math.max(200,(cfg.x1-cfg.x0));
     let x=cfg.x0, y=cfg.top, slope=slp(), dirty=false;
-    function by(xx){ return y + slope*(xx-cfg.x0); }
-    function nl(){ x=cfg.x0; y+=cfg.lineH; slope=slp();
+    function by(xx){ return y + slope*(xx-cfg.x0) + Math.sin(xx*waveF+wavePh)*eng.fs*0.06*opt.jitter; }
+    function nl(){ x=cfg.x0; y+=cfg.lineH; slope=slp(); wavePh=rng()*7; waveF=(0.5+rng())*Math.PI*2/Math.max(200,(cfg.x1-cfg.x0));
       if(y>cfg.bottom){ pages.push(pg); pageIndex++; pg=newPage(P); cfg.paint(pg.ctx,P,pageIndex); y=cfg.top; dirty=false; } }
+    const advJit=()=>1+(rng()-0.5)*0.05*opt.jitter;   // avance por letra levemente disparejo
     for(const para of paras){
       if(para.blank){ nl(); continue; }
       for(const word of para.words){
         if(eng.stepWord) eng.stepWord();                       // desgaste: tajado / tinta
-        // tachón: escribe la palabra "mal", la raya y la reescribe al lado
-        const doStrike = opt.strikes>0 && word.w<(cfg.x1-cfg.x0)*0.4 && rng()<0.16*opt.strikes;
-        if(x>cfg.x0 && x+word.w*(doStrike?2.25:1)>cfg.x1) nl();
-        // inclinación propia de la palabra (sesgo hacia abajo → asimetría natural)
+        // tachón: palabra con ERROR real de letras, rayada, y corregida (en otra fuente si hay)
+        const doStrike = opt.strikes>0 && word.items.length>2 && word.w<(cfg.x1-cfg.x0)*0.4 && rng()<0.16*opt.strikes;
+        if(x>cfg.x0 && x+word.w*(doStrike?2.25:1)>cfg.x1){
+          const rem=cfg.x1-x;
+          // continuación con barra baja: parte la palabra y sigue en el renglón siguiente
+          if(!doStrike && rem>(cfg.x1-cfg.x0)*0.22 && word.items.length>3 && rng()<0.6){
+            const dash=eng.mkItem('_');
+            let wxA=x; const wS=((rng()-0.42)*0.05)*opt.jitter; const wyA=xx=>by(xx)+wS*(xx-wxA);
+            let k=0;
+            while(k<word.items.length-1 && x+word.items[k].adv+dash.adv<=cfg.x1){
+              word.items[k].render(pg.ctx,x,wyA(x)); x+=word.items[k].adv*advJit(); k++;
+            }
+            dash.render(pg.ctx,x,wyA(x)); nl();
+            let wxB=x; const wyB=xx=>by(xx)+wS*(xx-wxB);
+            for(;k<word.items.length;k++){ word.items[k].render(pg.ctx,x,wyB(x)); x+=word.items[k].adv*advJit(); }
+            x+=eng.spaceW*(1+(rng()-0.4)*0.5*opt.jitter); dirty=true; continue;
+          }
+          nl();
+        }
+        // inclinación propia de la palabra (sube o baja levemente → asimetría natural)
         let wx0=x; const wSlope=((rng()-0.42)*0.055)*opt.jitter;
         const wy=xx=>by(xx)+wSlope*(xx-wx0);
         if(doStrike){
           const sx0=x;
-          for(const it of word.items){ it.render(pg.ctx,x,wy(x)); x+=it.adv; }
-          const passes=2+Math.floor(rng()*2);
-          for(let k=0;k<passes;k++){
-            const yy=wy((sx0+x)/2)-eng.fs*(0.15+rng()*0.35);
-            sketchLine(pg.ctx,sx0-2,yy+(rng()-0.5)*4,x+2,yy+(rng()-0.5)*4,eng.ink,rng,Math.max(1.5,eng.fs*0.06));
-          }
-          x+=eng.spaceW*0.6; wx0=x; dirty=true;
+          const wInk=(word.c&&eng.inkFor)?eng.inkFor(word.c):eng.ink;   // el tachón respeta el color
+          // 1) la palabra "mal escrita": letras mutadas de forma plausible
+          const badChars=mutateChars(word.items.map(it=>it.ch||'a'),rng);
+          for(const ch of badChars){ const it=eng.mkItem(ch); it.render(pg.ctx,x,wy(x)); x+=it.adv*advJit(); }
+          // 2) el rayado encima (uno de cientos de estilos)
+          scribbleWord(pg.ctx,sx0,x,wy((sx0+x)/2)+eng.fs*0.32,eng.fs,wInk,rng,0.9*(1-opt.transp*0.5));
+          x+=eng.spaceW*0.6; wx0=x;
+          // 3) la corrección, con OTRA fuente si hay mezcla/alternativa
+          if(eng.beginAlt) eng.beginAlt();
+          for(const it0 of word.items){ const it=eng.mkItem(it0.ch||'a'); it.render(pg.ctx,x,wy(x)); x+=it.adv*advJit(); }
+          dirty=true;
         }
-        if(word.w>(cfg.x1-cfg.x0)){ for(const it of word.items){ if(x+it.adv>cfg.x1){ nl(); wx0=x; } it.render(pg.ctx,x,wy(x)); x+=it.adv; dirty=true; } }
+        else if(word.w>(cfg.x1-cfg.x0)){ for(const it of word.items){ if(x+it.adv>cfg.x1){ nl(); wx0=x; } it.render(pg.ctx,x,wy(x)); x+=it.adv*advJit(); dirty=true; } }
         else { let first=true; for(const it of word.items){ it.render(pg.ctx,x,wy(x));
-            if(first&&opt.blots&&rng()<0.012*opt.blots) eng.blot(pg.ctx,x,wy(x)); first=false; x+=it.adv; } dirty=true; }
+            if(first&&opt.blots&&rng()<0.012*opt.blots) eng.blot(pg.ctx,x,wy(x)); first=false; x+=it.adv*advJit(); } dirty=true; }
         // subrayado imperfecto (marca {u})
         if(word.u && x>wx0){
           const uInk=(word.c&&eng.inkFor)?eng.inkFor(word.c):eng.ink;
@@ -509,6 +621,45 @@ const GENERATE = (() => {
     const cfg={ x0:ml, x1:P.w-mr, top:mt+lineH*0.85, bottom:P.h-mb, lineH, drift:opt.drift>0,
       paint:(ctx,Pp,idx)=>paintPaper(ctx,Pp,opt,ml,mr,mt,mb,lineH) };
     return composePages(paras, opt, eng, cfg).pages.map(p=>p.canvas);
+  }
+
+  /* ---- tachones: 5 estilos paramétricos (líneas/zigzag/bucles/onda/X) ×
+     pasadas, alturas, fases y amplitudes aleatorias = cientos de formas ---- */
+  function scribbleWord(ctx,x0,x1,yBase,fs,ink,rng,alpha){
+    const style=Math.floor(rng()*5);
+    ctx.save();
+    ctx.strokeStyle=`hsla(${ink.h},${ink.s}%,${ink.l}%,${alpha??0.9})`;
+    ctx.lineCap='round'; ctx.lineJoin='round';
+    const yMid=yBase-fs*0.32, w=Math.max(1.4,fs*0.055);
+    const seg=(fn,steps)=>{ ctx.beginPath(); for(let i=0;i<=steps;i++){ const t=i/steps;
+      const [px,py]=fn(t); i?ctx.lineTo(px,py):ctx.moveTo(px,py); } ctx.stroke(); };
+    if(style===0){                                  // rayas horizontales 1-4
+      const n=1+Math.floor(rng()*4);
+      for(let k=0;k<n;k++){ const yy=yMid+(rng()-0.5)*fs*0.5; ctx.lineWidth=w*(0.8+rng()*0.6);
+        seg(t=>[x0-3+(x1-x0+6)*t, yy+(rng()-0.5)*3+Math.sin(t*9+rng()*7)*1.5],7); }
+    } else if(style===1){                           // zigzag
+      const amp=fs*(0.18+rng()*0.25), n=4+Math.floor((x1-x0)/(fs*0.5));
+      ctx.lineWidth=w;
+      seg(t=>[x0+(x1-x0)*t, yMid+((Math.round(t*n)%2)?amp:-amp)+(rng()-0.5)*2],n*2);
+    } else if(style===2){                           // bucles (eeee)
+      const n=Math.max(3,Math.floor((x1-x0)/(fs*0.45))), r=fs*(0.16+rng()*0.14);
+      ctx.lineWidth=w*0.9;
+      seg(t=>{ const a=t*n*Math.PI*2; return [x0+(x1-x0)*t+Math.cos(a)*r*0.7, yMid+Math.sin(a)*r]; },n*10);
+    } else if(style===3){                           // onda apretada
+      const f=6+rng()*8, amp=fs*(0.12+rng()*0.2);
+      ctx.lineWidth=w;
+      const passes=1+Math.floor(rng()*2);
+      for(let k=0;k<passes;k++){ const ph=rng()*7, yy=yMid+(rng()-0.5)*fs*0.3;
+        seg(t=>[x0+(x1-x0)*t, yy+Math.sin(t*f*Math.PI+ph)*amp],24); }
+    } else {                                        // X + garabato encima
+      ctx.lineWidth=w;
+      seg(t=>[x0+(x1-x0)*t, yBase-fs*0.75+fs*0.8*t+(rng()-0.5)*3],6);
+      seg(t=>[x0+(x1-x0)*t, yBase+fs*0.05-fs*0.8*t+(rng()-0.5)*3],6);
+      if(rng()<0.6){ const f=5+rng()*6, ph=rng()*7;
+        ctx.lineWidth=w*0.8;
+        seg(t=>[x0+(x1-x0)*t, yMid+Math.sin(t*f*Math.PI+ph)*fs*0.2],20); }
+    }
+    ctx.restore();
   }
 
   /* ---- trazos "a mano" para marcos/líneas (temblor leve) ---- */
@@ -654,8 +805,7 @@ const GENERATE = (() => {
         if(x>x0 && x+word.w*(doStrike?2.2:1)>x1){ x=x0; y+=lineH; slope=slp(); if(y>bottom){stop=true;break;} }
         let wx0=x; const wSlope=((rng()-0.42)*0.055)*opt.jitter; const wy=xx=>by(xx)+wSlope*(xx-wx0);
         if(doStrike){ const sx0=x; for(const it of word.items){ it.render(ctx,x,wy(x)); x+=it.adv; }
-          for(let k=0;k<2;k++){ const yy=wy((sx0+x)/2)-fs*(0.15+rng()*0.3);
-            sketchLine(ctx,sx0-2,yy+(rng()-0.5)*3,x+2,yy+(rng()-0.5)*3,eng.ink,rng,Math.max(1.4,fs*0.06)); }
+          scribbleWord(ctx,sx0,x,wy((sx0+x)/2)+fs*0.32,fs,eng.ink,rng,0.9);
           x+=eng.spaceW*0.6; wx0=x; }
         let first=true; for(const it of word.items){ it.render(ctx,x,wy(x));
           if(first&&opt.blots&&rng()<0.012*opt.blots) eng.blot(ctx,x,wy(x)); first=false; x+=it.adv; }

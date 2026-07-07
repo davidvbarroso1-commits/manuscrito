@@ -33,18 +33,29 @@ const FONTS = (() => {
   // 30 fuentes elegidas por parecido a la letra del usuario (cursiva fina,
   // semi-conectada, desprolija, tipo apunte de cuaderno a lápiz)
   const SIMILAR = [
-    'Homemade Apple','Cedarville Cursive','Zeyada','La Belle Aurore','Dawning of a New Day',
-    'Nothing You Could Do','Waiting for the Sunrise','Give You Glory','Beth Ellen','Reenie Beanie',
-    'Sue Ellen Francisco','Loved by the King','Over the Rainbow','Just Me Again Down Here',
-    'Annie Use Your Telescope','The Girl Next Door','Shadows Into Light','Shadows Into Light Two',
-    'Stalemate','Ruthie','Meddon','League Script','Kristi','Vibur','Caveat','Caveat Brush',
-    'Bad Script','Neucha','Mansalva','Sedgwick Ave',
-    // segunda tanda: cursivas feas/deshechas, trazo fino tipo lápiz apurado
-    'Petemoss','Fuggles','Square Peg','Qwitcher Grypen','Water Brush','Whisper','Splash',
-    'Smooch','Mea Culpa','Hurricane','Kolker Brush','Sassy Frass','Ruge Boogie','Oooh Baby',
-    'Moon Dance','Caramel','Cherish','Grechen Fuemen','Neonderthaw','Estonia','Vujahday Script',
-    'Babylonica','Passions Conflict','Tapestry','Updock','Twinkle Star','Praise','Love Light',
-    'Send Flowers','Island Moments','Ole','Are You Serious'];
+    // ★ las 16 elegidas por el usuario (su mezcla predeterminada) van primero
+    'Homemade Apple','League Script','Dawning of a New Day','Zeyada','Stalemate',
+    'Island Moments','Send Flowers','Passions Conflict','Babylonica','Sassy Frass',
+    'Hurricane','Whisper','Qwitcher Grypen','Fuggles','Petemoss','Beth Ellen',
+    // resto de cursivas desprolijas
+    'Cedarville Cursive','La Belle Aurore','Nothing You Could Do','Waiting for the Sunrise',
+    'Give You Glory','Reenie Beanie','Sue Ellen Francisco','Loved by the King','Over the Rainbow',
+    'Just Me Again Down Here','Annie Use Your Telescope','The Girl Next Door','Shadows Into Light',
+    'Shadows Into Light Two','Ruthie','Meddon','Kristi','Vibur','Caveat','Caveat Brush',
+    'Bad Script','Neucha','Mansalva','Sedgwick Ave','Square Peg','Water Brush','Splash',
+    'Smooch','Mea Culpa','Kolker Brush','Ruge Boogie','Oooh Baby','Moon Dance','Caramel',
+    'Cherish','Grechen Fuemen','Neonderthaw','Estonia','Vujahday Script','Tapestry','Updock',
+    'Twinkle Star','Praise','Love Light','Ole','Are You Serious',
+    // tercera tanda: más cursivas finas parecidas a las 16 elegidas
+    'Ms Madi','My Soul','Lovers Quarrel','Dr Sugiyama','Miss Fajardose','Mr Bedfort',
+    'Mrs Sheppards','Monsieur La Doulaise','Jim Nightshade','Meie Script','Redressed',
+    'Aguafina Script','Felipa','Bilbo','Bilbo Swash Caps','Euphoria Script','Engagement',
+    'Devonshire','Condiment'];
+
+  // mezcla predeterminada del usuario (sus 16 elegidas)
+  const DEFAULT_MIX = ['League Script','Dawning of a New Day','Zeyada','Stalemate',
+    'Island Moments','Send Flowers','Passions Conflict','Babylonica','Sassy Frass',
+    'Hurricane','Whisper','Qwitcher Grypen','Fuggles','Petemoss','Homemade Apple','Beth Ellen'];
 
   let hand = null, print = null, full = false;
 
@@ -104,5 +115,5 @@ const FONTS = (() => {
     return p;
   }
 
-  return { load, ensure, SIMILAR };
+  return { load, ensure, SIMILAR, DEFAULT_MIX };
 })();
