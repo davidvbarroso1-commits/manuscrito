@@ -629,16 +629,40 @@ const GENERATE = (() => {
   function schedulePreview(){ clearTimeout(pvTimer); pvTimer=setTimeout(renderRealismPreview,180); }
   async function renderRealismPreview(){
     const cv=document.getElementById('realismPreview'); if(!cv) return;
-    const wrapW=(cv.parentElement.clientWidth||260)-2, h=104, d=window.devicePixelRatio||1;
-    cv.width=wrapW*d; cv.height=h*d; cv.style.width=wrapW+'px'; cv.style.height=h+'px';
+    // ancho mínimo: si el contenedor es angosto (o el layout aún no asentó) igual se ve bien
+    const wrapW=Math.max(240,(cv.parentElement.clientWidth||260)-2), h=128, d=window.devicePixelRatio||1;
+    cv.width=wrapW*d; cv.height=h*d; cv.style.width='100%'; cv.style.height=h+'px';
     const ctx=cv.getContext('2d'); ctx.setTransform(d,0,0,d,0,0); ctx.fillStyle='#fffdf8'; ctx.fillRect(0,0,wrapW,h);
-    ctx.strokeStyle='#e7eef6'; ctx.lineWidth=1;
     const opt=buildOpt(); opt._seed=777;
-    const fs=Math.round(h*0.30), lineH=fs*1.7;
-    for(let y=fs+8; y<h; y+=lineH){ ctx.beginPath(); ctx.moveTo(8,y+3); ctx.lineTo(wrapW-8,y+3); ctx.stroke(); }
+    const fs=Math.round(h*0.17), lineH=fs*1.8;
+    ctx.strokeStyle='#e7eef6'; ctx.lineWidth=1;
+    for(let y=fs+12; y<h; y+=lineH){ ctx.beginPath(); ctx.moveTo(8,y+3); ctx.lineTo(wrapW-8,y+3); ctx.stroke(); }
     let eng; try{ eng=await makeEngine(opt, fs); }catch(e){ return; }
     if(!eng.ok){ ctx.fillStyle='#8a8175'; ctx.font='13px Inter,sans-serif'; ctx.fillText('Captura tu letra o elige una fuente',12,h/2); return; }
-    drawBlock(ctx, 'Apuntes a mano: ¿qué tal?\náéíóú ñ 123 — prueba.', {x0:12,x1:wrapW-12,top:fs+8,bottom:h-2}, eng, lineH);
+    // mini-maqueta que refleja TODOS los sliders (caída, temblor, tachones, manchas, repintado)
+    const rng=eng.rng, x0=12, x1=wrapW-12, bottom=h-6;
+    const paras=buildParas('El pensamiento crítico\náéíóú ñ 123 ¿sí?', eng.mkItem, eng.onWord);
+    const slp=()=>(rng()-0.5)*0.05*opt.drift + 0.035*(opt.fall||0);
+    let x=x0, y=fs+12, slope=slp(), stop=false;
+    const by=xx=>y+slope*(xx-x0);
+    for(const para of paras){
+      if(stop) break;
+      if(para.blank){ x=x0; y+=lineH; slope=slp(); continue; }
+      for(const word of para.words){
+        if(eng.stepWord) eng.stepWord();
+        const doStrike=opt.strikes>0 && word.w<(x1-x0)*0.5 && rng()<0.16*opt.strikes;
+        if(x>x0 && x+word.w*(doStrike?2.2:1)>x1){ x=x0; y+=lineH; slope=slp(); if(y>bottom){stop=true;break;} }
+        let wx0=x; const wSlope=((rng()-0.42)*0.055)*opt.jitter; const wy=xx=>by(xx)+wSlope*(xx-wx0);
+        if(doStrike){ const sx0=x; for(const it of word.items){ it.render(ctx,x,wy(x)); x+=it.adv; }
+          for(let k=0;k<2;k++){ const yy=wy((sx0+x)/2)-fs*(0.15+rng()*0.3);
+            sketchLine(ctx,sx0-2,yy+(rng()-0.5)*3,x+2,yy+(rng()-0.5)*3,eng.ink,rng,Math.max(1.4,fs*0.06)); }
+          x+=eng.spaceW*0.6; wx0=x; }
+        let first=true; for(const it of word.items){ it.render(ctx,x,wy(x));
+          if(first&&opt.blots&&rng()<0.012*opt.blots) eng.blot(ctx,x,wy(x)); first=false; x+=it.adv; }
+        x+=eng.spaceW*(1+(rng()-0.4)*0.5*opt.jitter);
+      }
+      x=x0; y+=lineH; slope=slp(); if(y>bottom) stop=true;
+    }
   }
 
   /* ---------- papel ---------- */
