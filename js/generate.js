@@ -42,6 +42,7 @@ const GENERATE = (() => {
     sync('optPressure','valPressure'); sync('optTone','valTone'); sync('optTransp','valTransp');
     sync('optJitter','valJitter'); sync('optDrift','valDrift'); sync('optBlots','valBlots');
     sync('optWear','valWear'); sync('optSmooth','valSmooth'); sync('optFall','valFall');
+    sync('optRetrace','valRetrace'); sync('optStrikes','valStrikes');
     sync('optSlant','valSlant',x=>x+'°');
 
     document.getElementById('optInstrument').addEventListener('change', e=>{
@@ -118,7 +119,7 @@ const GENERATE = (() => {
 
     // vista previa de realismo en vivo
     ['optInstrument','optColor','optSize','optLine','optPressure','optTone','optTransp',
-     'optSmooth','optFall','optJitter','optDrift','optBlots','optWear','optSlant','optFontKind','optPaper'].forEach(id=>{
+     'optSmooth','optFall','optJitter','optDrift','optBlots','optWear','optRetrace','optStrikes','optSlant','optFontKind','optPaper'].forEach(id=>{
       const el=document.getElementById(id); if(el){ el.addEventListener('input',schedulePreview); el.addEventListener('change',schedulePreview); }
     });
 
@@ -268,6 +269,7 @@ const GENERATE = (() => {
     smooth:+(val('optSmooth')||45)/100, fall:+(val('optFall')||15)/100,
     jitter:+val('optJitter')/100, drift:+val('optDrift')/100, blots:+val('optBlots')/100,
     wear:+(val('optWear')||45)/100,
+    retrace:+(val('optRetrace')||12)/100, strikes:+(val('optStrikes')||8)/100,
     slant:+val('optSlant'), instr:INSTRUMENTS[val('optInstrument')]||INSTRUMENTS['boli-azul'],
     format:val('optFormat'), fontVal:val('optFont')||'',
     mix:(document.getElementById('mixUse')&&document.getElementById('mixUse').checked&&mixList.length>=2)?mixList.slice():null,
@@ -360,9 +362,12 @@ const GENERATE = (() => {
       const useInk=(st&&st.c)?inkFor(st.c):ink;
       const useInstr=(st&&st.ins)?INSTRUMENTS[st.ins]:null;
       return {adv:RENDER.advance(v,fsW,1)+gap, render:(ctx,x,y)=>{
-        if(useInstr){ const save={}; for(const k of INSTR_KEYS){ save[k]=R[k]; R[k]=useInstr[k]; }
-          RENDER.glyph(ctx,v,x,y,fsW,useInk,R); Object.assign(R,save); }
-        else RENDER.glyph(ctx,v,x,y,fsW,useInk,R);
+        const save={}; if(useInstr) for(const k of INSTR_KEYS){ save[k]=R[k]; R[k]=useInstr[k]; }
+        RENDER.glyph(ctx,v,x,y,fsW,useInk,R);
+        // repintado: segunda pasada levemente corrida (como reforzar/corregir el trazo)
+        if(opt.retrace>0 && rng()<opt.retrace*0.3)
+          RENDER.glyph(ctx,v,x+(rng()-0.5)*fsW*0.07,y+(rng()-0.5)*fsW*0.06,fsW,useInk,R);
+        if(useInstr) Object.assign(R,save);
       }}; };
     return {ok:true, useFont:false, fs, spaceW:fs*0.34, mkItem, onWord, inkFor, ink, rng, blot:mkBlot(ink,fs,opt), stepWord};
   }
@@ -384,6 +389,12 @@ const GENERATE = (() => {
     ctx.fillText(ch,0,0);
     // fuente delgada: contorno extra la engrosa (League Script y similares)
     if(boost){ ctx.strokeStyle=fill; ctx.lineWidth=fontPx*0.014*boost; ctx.lineJoin='round'; ctx.strokeText(ch,0,0); }
+    // repintado: segunda pasada levemente corrida
+    if(opt.retrace>0 && rng()<opt.retrace*0.3){
+      ctx.globalAlpha=0.75;
+      ctx.fillText(ch,(rng()-0.5)*fontPx*0.06,(rng()-0.5)*fontPx*0.05);
+      ctx.globalAlpha=1;
+    }
     // zona de MÁS presión dentro de la letra (mancha más marcada en un punto aleatorio)
     if(opt.pressure>0.2 && rng()<0.7){
       const w=ctx.measureText(ch).width;
@@ -444,10 +455,22 @@ const GENERATE = (() => {
       if(para.blank){ nl(); continue; }
       for(const word of para.words){
         if(eng.stepWord) eng.stepWord();                       // desgaste: tajado / tinta
-        if(x>cfg.x0 && x+word.w>cfg.x1) nl();
+        // tachón: escribe la palabra "mal", la raya y la reescribe al lado
+        const doStrike = opt.strikes>0 && word.w<(cfg.x1-cfg.x0)*0.4 && rng()<0.16*opt.strikes;
+        if(x>cfg.x0 && x+word.w*(doStrike?2.25:1)>cfg.x1) nl();
         // inclinación propia de la palabra (sesgo hacia abajo → asimetría natural)
         let wx0=x; const wSlope=((rng()-0.42)*0.055)*opt.jitter;
         const wy=xx=>by(xx)+wSlope*(xx-wx0);
+        if(doStrike){
+          const sx0=x;
+          for(const it of word.items){ it.render(pg.ctx,x,wy(x)); x+=it.adv; }
+          const passes=2+Math.floor(rng()*2);
+          for(let k=0;k<passes;k++){
+            const yy=wy((sx0+x)/2)-eng.fs*(0.15+rng()*0.35);
+            sketchLine(pg.ctx,sx0-2,yy+(rng()-0.5)*4,x+2,yy+(rng()-0.5)*4,eng.ink,rng,Math.max(1.5,eng.fs*0.06));
+          }
+          x+=eng.spaceW*0.6; wx0=x; dirty=true;
+        }
         if(word.w>(cfg.x1-cfg.x0)){ for(const it of word.items){ if(x+it.adv>cfg.x1){ nl(); wx0=x; } it.render(pg.ctx,x,wy(x)); x+=it.adv; dirty=true; } }
         else { let first=true; for(const it of word.items){ it.render(pg.ctx,x,wy(x));
             if(first&&opt.blots&&rng()<0.012*opt.blots) eng.blot(pg.ctx,x,wy(x)); first=false; x+=it.adv; } dirty=true; }
