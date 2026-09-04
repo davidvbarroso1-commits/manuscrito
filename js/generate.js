@@ -2678,6 +2678,8 @@ const GENERATE = (() => {
     const r=fs*(0.05+0.06*Math.random()); ctx.beginPath(); ctx.ellipse(x+fs*0.05,y-fs*0.18,r,r*0.8,0,0,7); ctx.fill(); ctx.restore(); }; }
 
   async function makeEngine(opt, fsOverride){
+    // el dibujo es sincrono: rough.js tiene que estar antes de la primera hoja
+    try{ if(!window.rough && typeof LIBS!=='undefined' && LIBS.rough) await LIBS.rough(); }catch(e){}
     const P=paperDims(opt), scale=P.w/820;
     const ink=RENDER.rgbToHsl(RENDER.hexToRgb(opt.color));
     const seed=(0x9e37 ^ (opt._seed||1234))>>>0;
@@ -3414,12 +3416,52 @@ const GENERATE = (() => {
     const ru=(()=>{ const v=+(val('optObjRough')); return isNaN(v)?55:clamp(v,0,100); })()/100;
     const o=()=>(rng()-0.5)*fs*0.28*ru;              // esquinas que se pasan o se quedan cortas
     const gw=Math.max(1.4, fs*0.045);
+    const R=rc(ctx);
+    if(R){
+      /* Un recuadro de una sola pieza, no cuatro lineas pegadas: rough.js ya
+         hace que las esquinas se pasen y que el trazo se repase, que es lo
+         que el bucle de abajo imitaba a mano.                              */
+      R.rectangle(ax,ay,bx-ax,by2-ay,{ stroke:tinta(ink), strokeWidth:gw,
+        roughness:clamp(0.6+2.4*ru,0.5,3.2), bowing:clamp(0.6+1.4*ru,0.5,2.4),
+        seed:(rng()*1e6)|0 });
+      return;
+    }
     sketchLine(ctx, ax+o(), ay+o(), bx+o(), ay+o(), ink, rng, gw);
     sketchLine(ctx, bx+o(), ay+o(), bx+o(), by2+o(), ink, rng, gw);
     sketchLine(ctx, bx+o(), by2+o(), ax+o(), by2+o(), ink, rng, gw);
     sketchLine(ctx, ax+o(), by2+o(), ax+o(), ay+o(), ink, rng, gw);
   }
+  /* ── DIBUJO A MANO CON rough.js ──────────────────────────────────────
+     Antes el trazo "a mano" era una linea recta partida en 6 tramos con un
+     desplazamiento al azar en cada vertice. Se nota que es una recta con
+     ruido: no tiene el doble repaso, ni las esquinas que se pasan, ni el
+     grosor que cambia a lo largo del trazo.
+     rough.js hace justo eso, y es lo que usan Excalidraw y compania. Aqui se
+     enchufa como MOTOR de las primitivas que ya existian, no como codigo
+     nuevo en paralelo: todo lo que dibujaba con sketchLine/sketchRect/
+     sketchEllipse (tablas, mapas mentales, formulas, croquis) mejora de una
+     vez, y si la libreria no ha cargado se sigue dibujando como antes.
+     La semilla sale del rng del documento, asi que la misma hoja se vuelve a
+     dibujar igual: sin eso el banco de pruebas dejaria de ser comparable.  */
+  let _rcCanvas=null, _rc=null;
+  function rc(ctx){
+    if(typeof rough==='undefined' || !rough) return null;
+    const cv=ctx&&ctx.canvas; if(!cv) return null;
+    if(_rcCanvas!==cv){ _rc=rough.canvas(cv); _rcCanvas=cv; }
+    return _rc;
+  }
+  const tinta=(ink,a)=>`hsla(${ink.h},${ink.s}%,${ink.l}%,${a==null?0.85:a})`;
+  /* 'temblor' venia en pixeles de desvio; rough.js lo pide como roughness
+     (cuanto se desvia) y bowing (cuanto se arquea la linea entre extremos).
+     Se traduce en vez de inventar numeros nuevos, para que el mando de
+     Imperfeccion que ya existe siga significando lo mismo.                 */
+  const rugosidad=tb=>clamp((tb==null?3:tb)*0.42, 0.5, 3.2);
+  const arqueo   =tb=>clamp(0.5+(tb==null?3:tb)*0.16, 0.5, 2.4);
   function sketchLine(ctx,x0,y0,x1,y1,ink,rng,w,temblor){
+    const R=rc(ctx);
+    if(R){ R.line(x0,y0,x1,y1,{ stroke:tinta(ink), strokeWidth:w||2,
+             roughness:rugosidad(temblor), bowing:arqueo(temblor),
+             seed:(rng()*1e6)|0 }); return; }
     ctx.strokeStyle=`hsla(${ink.h},${ink.s}%,${ink.l}%,0.85)`; ctx.lineWidth=w||2; ctx.lineCap='round';
     const tb=(temblor==null?3:temblor);
     const n=6; ctx.beginPath(); ctx.moveTo(x0,y0);
@@ -3428,6 +3470,9 @@ const GENERATE = (() => {
     ctx.stroke();
   }
   function sketchRect(ctx,x0,y0,x1,y1,ink,rng){
+    const R=rc(ctx);
+    if(R){ R.rectangle(x0,y0,x1-x0,y1-y0,{ stroke:tinta(ink), strokeWidth:2,
+             roughness:1.3, bowing:1, seed:(rng()*1e6)|0 }); return; }
     // esquinas con leve remate (como trazo a mano que se pasa un poquito)
     const o=()=> (rng()-0.5)*4;
     sketchLine(ctx,x0-2,y0+o(),x1+2,y0+o(),ink,rng,2);
@@ -3436,6 +3481,9 @@ const GENERATE = (() => {
     sketchLine(ctx,x0+o(),y1+2,x0+o(),y0-2,ink,rng,2);
   }
   function sketchEllipse(ctx,cx,cy,rx,ry,ink,rng){
+    const R=rc(ctx);
+    if(R){ R.ellipse(cx,cy,rx*2,ry*2,{ stroke:tinta(ink), strokeWidth:2.4,
+             roughness:1.2, bowing:1, seed:(rng()*1e6)|0 }); return; }
     ctx.strokeStyle=`hsla(${ink.h},${ink.s}%,${ink.l}%,0.85)`; ctx.lineWidth=2.4; ctx.beginPath();
     for(let i=0;i<=26;i++){ const a=i/26*Math.PI*2;
       const x=cx+Math.cos(a)*(rx+(rng()-0.5)*4), y=cy+Math.sin(a)*(ry+(rng()-0.5)*4);

@@ -42,6 +42,17 @@ const LIBS = (() => {
     return window.jspdf;
   }
 
+  /* rough.js — dibujo con aspecto hecho a mano (tablas, recuadros, mapas).
+     Sustituye al trazo con temblor propio: hace las esquinas que se pasan,
+     el doble repaso y el grosor disparejo de quien dibuja con boligrafo.
+     Se carga sola al empezar (ver generate.js) porque el dibujo es sincrono
+     y tiene que estar lista antes de pintar la primera hoja.               */
+  async function rough(){
+    if (window.rough) return window.rough;
+    await loadScript('https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.js');
+    return window.rough;
+  }
+
   // transformers.js (Whisper para transcripción de audio, offline en el navegador). ESM → import dinámico.
   let _tf=null;
   async function transformers(){
@@ -50,5 +61,5 @@ const LIBS = (() => {
     return _tf;
   }
 
-  return { pdfjs, mammoth, tesseract, jspdf, transformers };
+  return { pdfjs, mammoth, tesseract, jspdf, transformers, rough };
 })();
