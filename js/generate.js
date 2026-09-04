@@ -3635,6 +3635,98 @@ const GENERATE = (() => {
   }
 
   /* ---- mapa mental: centro + ramas radiales ---- */
+  /* ── MAPA MENTAL: medir antes de colocar ─────────────────────────────
+     Antes las posiciones eran formulas fijas (P.h*0.24 + fila*paso) que no
+     miraban el texto. Nadie media cuanto ocupa una rama, asi que se cruzaban
+     unas con otras: no era mala suerte, era inevitable. Y por lo mismo el
+     mapa "no tenia logica": la estructura salia de la plantilla, no del
+     contenido.
+     Ahora cada nodo se MIDE primero -- se parte en lineas segun el ancho que
+     se le da y de ahi sale su caja real -- y despues se colocan resolviendo
+     los solapes. Los enlaces van de borde a borde de las cajas, no a puntos
+     inventados, asi que la linea nunca entra por encima del texto.          */
+  function nodoMapa(texto, frag, anchoMax, eng, lineH){
+    const lineas=partirCelda(texto||'', eng, anchoMax);
+    const sub=frag? partirCelda(frag, eng, anchoMax) : [];
+    let w=0;
+    for(const l of lineas) w=Math.max(w, medirTexto(l,eng));
+    for(const l of sub)    w=Math.max(w, medirTexto(l,eng)*0.9);
+    return { lineas, sub, w:Math.min(anchoMax, Math.max(w, eng.fs*2)),
+             h: lineas.length*lineH + sub.length*lineH*0.85 };
+  }
+  /* Empuja las cajas hasta que no se toquen. Solo en vertical dentro de su
+     columna: mover en las dos direcciones desbarata la estructura del mapa,
+     que es justo lo que se quiere conservar.                                */
+  function separaCajas(cajas, margen, limiteAlto){
+    const por=new Map();
+    for(const c of cajas){ const k=Math.round(c.x/40);
+      if(!por.has(k)) por.set(k,[]); por.get(k).push(c); }
+    for(const grupo of por.values()){
+      grupo.sort((a,b)=>a.y-b.y);
+      for(let i=1;i<grupo.length;i++){
+        const ant=grupo[i-1], act=grupo[i];
+        const minY=ant.y+ant.h+margen;
+        if(act.y<minY) act.y=minY;
+      }
+      // si se salen por abajo, se comprime el conjunto hacia arriba
+      const ult=grupo[grupo.length-1];
+      if(ult && ult.y+ult.h>limiteAlto){
+        const sobra=ult.y+ult.h-limiteAlto, primero=grupo[0];
+        const sitio=Math.max(0, primero.y-margen);
+        const mueve=Math.min(sobra, sitio);
+        for(const c of grupo) c.y-=mueve;
+      }
+    }
+    return cajas;
+  }
+  /* Enlace de BORDE a BORDE: se recorta el segmento centro-centro contra las
+     dos cajas, asi la linea nace donde acaba una y muere donde empieza la
+     otra en vez de cruzarlas por encima.                                    */
+  function enlazaCajas(ctx, a, b, eng, rng, grosor){
+    const ax=a.x+a.w/2, ay=a.y+a.h/2, bx=b.x+b.w/2, by=b.y+b.h/2;
+    const corta=(caja, hx, hy, ox, oy)=>{
+      const dx=hx-ox, dy=hy-oy;
+      let t=1;
+      if(dx) t=Math.min(t, Math.max((caja.x-ox)/dx, (caja.x+caja.w-ox)/dx));
+      if(dy) t=Math.min(t, Math.max((caja.y-oy)/dy, (caja.y+caja.h-oy)/dy));
+      return [ox+dx*t, oy+dy*t];
+    };
+    const [x1,y1]=corta(a, ax, ay, bx, by);
+    const [x2,y2]=corta(b, bx, by, ax, ay);
+    sketchLine(ctx, x1,y1, x2,y2, eng.ink, rng, grosor||2);
+  }
+  /* Enlace en CODO: baja por un tronco y entra de lado. Una recta de centro
+     a rama cruza por encima de todas las ramas que hay en medio -- se veia
+     clarisimo: las diagonales pasaban por encima del texto. Bajando por un
+     tronco que va por una columna libre y entrando en horizontal, el trazo no
+     puede cruzar a un hermano. Ademas es como se dibuja un mapa a mano.     */
+  function enlaceCodo(ctx, tronco, desdeY, c, eng, rng, grosor){
+    const y=c.y+c.h/2-eng.fs*0.25;
+    const entraPorLaIzquierda = c.x > tronco;
+    const xFin = entraPorLaIzquierda? c.x-10 : c.x+c.w+10;
+    sketchLine(ctx, tronco, desdeY, tronco, y, eng.ink, rng, grosor||1.8);
+    sketchLine(ctx, tronco, y, xFin, y+(rng()-0.5)*2, eng.ink, rng, grosor||1.8);
+  }
+  function pintaNodo(ctx, c, eng, lineH, rng, forma){
+    if(forma==='caja') sketchRect(ctx, c.x-8, c.y-lineH*0.55, c.x+c.w+8, c.y+c.h-lineH*0.15, eng.ink, rng);
+    else if(forma==='globo'){
+      /* El globo se dibuja sobre la caja MEDIDA con holgura suficiente para
+         dos lineas: con el margen antiguo el texto tocaba el borde.        */
+      sketchEllipse(ctx, c.x+c.w/2, c.y+c.h/2-lineH*0.28,
+                    c.w/2+eng.fs*0.9, c.h/2+lineH*0.55, eng.ink, rng);
+    }
+    else if(forma==='raya') sketchLine(ctx, c.x-4, c.y+c.h-lineH*0.15, c.x+c.w+4,
+                                       c.y+c.h-lineH*0.15+(rng()-0.5)*3, eng.ink, rng, 2);
+    let y=c.y;
+    for(const l of c.lineas){ let x=c.x;
+      for(const ch of l){ const it=eng.mkItem(ch); it.render(ctx,x,y); x+=it.adv; }
+      y+=lineH;
+    }
+    for(const l of c.sub){ let x=c.x+eng.fs*0.35;
+      for(const ch of l){ const it=eng.mkItem(ch); it.render(ctx,x,y); x+=it.adv; }
+      y+=lineH*0.85;
+    }
+  }
   function renderMindmap(mm, opt, eng){
     const P=paperDims(opt), lineH=eng.fs*opt.line;
     const pg=newPage(P), ctx=pg.ctx, rng=eng.rng;
@@ -3654,91 +3746,96 @@ const GENERATE = (() => {
     const branches=(mm.branches||[]).slice(0,10), n=branches.length||1;
     const wrapTxt=(t,x0,x1,y,lh)=>drawBlock(ctx,t,{x0,x1,top:y,bottom:y+lh*3},eng,lh);
 
-    if(style==='arbol'){                       // ÁRBOL: tronco a la izquierda, ramas a la derecha
-      const cx=P.w*0.20, cy=P.h*0.12, rx=P.w*0.16, ry=lineH*1.5;
-      sketchEllipse(ctx,cx,cy,rx,ry,eng.ink,rng);
-      wrapTxt(mm.center||'Tema', cx-rx+18, cx+rx-14, cy+eng.fs*0.3, lineH);
-      const top=P.h*0.26, step=Math.min(lineH*3.2,(P.h*0.66)/n);
+    /* Cada estilo COLOCA cajas ya medidas; el dibujo es comun. Asi anadir un
+       estilo es decir donde van las cajas, y ninguno puede volver a cruzar
+       texto porque el reparto y el pintado estan separados.                 */
+    const margen=lineH*0.55, alto=P.h*0.90;
+    const centro=nodoMapa(mm.center||'Tema', '', P.w*0.34, eng, lineH);
+    const cajas=[];
+    let formaC='globo', formaR='raya';
+
+    if(style==='arbol'){                       // ARBOL: tronco izquierda, ramas derecha
+      centro.x=P.w*0.06; centro.y=P.h*0.10; formaC='globo';
+      const ancho=P.w*0.52, x=P.w*0.40;
       branches.forEach((b,i)=>{
-        const y=top+i*step, x=P.w*0.42;
-        sketchLine(ctx,cx,cy+ry,cx,y,eng.ink,rng,2);            // tronco
-        sketchLine(ctx,cx,y,x-10,y,eng.ink,rng,2);              // rama
-        const yT=wrapTxt(b.term,x,P.w*0.72,y-eng.fs*0.1,lineH);
-        if(b.frag) drawBlock(ctx,b.frag,{x0:x,x1:P.w*0.94,top:yT-lineH*0.25,bottom:yT+lineH*2},eng,lineH*0.88);
+        const nd=nodoMapa(b.term,b.frag,ancho,eng,lineH);
+        nd.x=x; nd.y=P.h*0.24+i*(lineH*2.6); cajas.push(nd);
       });
-    } else if(style==='columnas'){             // COLUMNAS: título arriba, temas en 2 columnas
-      const cx=P.w/2, cy=P.h*0.11;
-      sketchRect(ctx,P.w*0.28,cy-lineH,P.w*0.72,cy+lineH*0.9,eng.ink,rng);
-      wrapTxt(mm.center||'Tema', P.w*0.30, P.w*0.70, cy+eng.fs*0.25, lineH);
-      const cols=2, rows=Math.ceil(n/cols);
+    } else if(style==='columnas'){             // COLUMNAS: titulo arriba, dos columnas
+      centro.x=(P.w-centro.w)/2; centro.y=P.h*0.09; formaC='caja'; formaR='caja';
+      const ancho=P.w*0.38;
       branches.forEach((b,i)=>{
-        const c=i%cols, r=(i/cols)|0;
-        const x0=P.w*(c?0.53:0.08), x1=P.w*(c?0.94:0.47);
-        const y=P.h*0.24+r*Math.min(lineH*3.4,(P.h*0.68)/rows);
-        sketchRect(ctx,x0,y-lineH*0.8,x1,y+lineH*1.9,eng.ink,rng);
-        const yT=wrapTxt(b.term,x0+14,x1-12,y-eng.fs*0.1,lineH);
-        if(b.frag) drawBlock(ctx,b.frag,{x0:x0+14,x1:x1-12,top:yT-lineH*0.3,bottom:y+lineH*1.8},eng,lineH*0.85);
+        const nd=nodoMapa(b.term,b.frag,ancho,eng,lineH);
+        nd.x=(i%2)? P.w*0.54 : P.w*0.07;
+        nd.y=P.h*0.24+((i/2)|0)*(lineH*3);
+        cajas.push(nd);
       });
     } else if(style==='espina'){               // ESPINA DE PESCADO
-      const yMid=P.h*0.5, x0=P.w*0.08, x1=P.w*0.80;
-      sketchLine(ctx,x0,yMid,x1,yMid,eng.ink,rng,3);
-      sketchLine(ctx,x1-26,yMid-16,x1,yMid,eng.ink,rng,3);
-      sketchLine(ctx,x1,yMid,x1-26,yMid+16,eng.ink,rng,3);
-      wrapTxt(mm.center||'Tema', x1+8, P.w-30, yMid+eng.fs*0.3, lineH);
+      centro.x=P.w*0.78; centro.y=P.h*0.46; formaC='caja';
+      const ancho=P.w*0.30;
       branches.forEach((b,i)=>{
-        const up=i%2===0, k=(i/2)|0;
-        const bx=x0+P.w*0.10+k*((x1-x0)*0.78/Math.max(1,Math.ceil(n/2)));
-        const by=up? yMid-P.h*0.20 : yMid+P.h*0.20;
-        sketchLine(ctx,bx,yMid,bx+ (up?60:-60), by,eng.ink,rng,2);
-        const tx=bx+(up?40:-140);
-        const yT=wrapTxt(b.term, tx, tx+P.w*0.22, by+(up?-lineH*0.2:lineH*0.6), lineH);
-        if(b.frag) drawBlock(ctx,b.frag,{x0:tx,x1:tx+P.w*0.24,top:yT-lineH*0.3,bottom:yT+lineH*2},eng,lineH*0.82);
+        const nd=nodoMapa(b.term,b.frag,ancho,eng,lineH);
+        const col=(i/2)|0;
+        nd.x=P.w*0.07+col*(P.w*0.22);
+        nd.y=(i%2)? P.h*0.62 : P.h*0.16;
+        cajas.push(nd);
       });
-    } else if(style==='burbujas'){             // BURBUJAS: globos sueltos unidos al centro
-      const cx=P.w*0.5, cy=P.h*0.22, rx=P.w*0.17, ry=lineH*1.7;
-      sketchEllipse(ctx,cx,cy,rx,ry,eng.ink,rng);
-      wrapTxt(mm.center||'Tema', cx-rx+18, cx+rx-14, cy+eng.fs*0.3, lineH);
-      const cols=Math.min(3,Math.max(2,Math.ceil(Math.sqrt(n))));
+    } else if(style==='burbujas'){             // BURBUJAS sueltas
+      centro.x=(P.w-centro.w)/2; centro.y=P.h*0.16; formaC='globo'; formaR='globo';
+      const ancho=P.w*0.26;
       branches.forEach((b,i)=>{
-        const c=i%cols, r=(i/cols)|0;
-        const bw=P.w*0.80/cols, bx=P.w*0.10+c*bw+bw*0.5;
-        const by=P.h*0.42+r*Math.min(lineH*4.2,(P.h*0.50)/Math.max(1,Math.ceil(n/cols)));
-        const brx=bw*0.42, bry=lineH*1.5;
-        sketchLine(ctx,cx,cy+ry,bx,by-bry,eng.ink,rng,1.8);
-        sketchEllipse(ctx,bx,by,brx,bry,eng.ink,rng);
-        const yT=wrapTxt(b.term, bx-brx+14, bx+brx-12, by-eng.fs*0.15, lineH);
-        if(b.frag) drawBlock(ctx,b.frag,{x0:bx-brx+14,x1:bx+brx-12,top:yT-lineH*0.25,bottom:by+bry},eng,lineH*0.8);
+        const nd=nodoMapa(b.term,b.frag,ancho,eng,lineH);
+        const col=i%3;
+        nd.x=P.w*(0.08+col*0.30);
+        nd.y=P.h*0.40+((i/3)|0)*(lineH*3.2);
+        cajas.push(nd);
       });
     } else if(style==='escalera'){             // ESCALERA: cada idea un peldano
-      const yT0=P.h*0.14;
-      wrapTxt(mm.center||'Tema', P.w*0.10, P.w*0.90, yT0, lineH*1.15);
-      sketchLine(ctx,P.w*0.10,yT0+lineH*0.4,P.w*0.62,yT0+lineH*0.4,eng.ink,rng,2.4);
+      centro.x=P.w*0.08; centro.y=P.h*0.10; formaC='raya'; formaR='raya';
       branches.forEach((b,i)=>{
-        const paso=Math.min(lineH*3.2,(P.h*0.66)/Math.max(1,n));
-        const y=P.h*0.26+i*paso;
-        const x0=P.w*(0.10+0.055*Math.min(i,5));      // se va escalonando
-        const x1=Math.min(P.w*0.94, x0+P.w*0.62);
-        sketchLine(ctx,x0,y+lineH*0.55,x1,y+lineH*0.55,eng.ink,rng,1.6);
-        sketchLine(ctx,x0,y-lineH*0.55,x0,y+lineH*0.55,eng.ink,rng,1.6);
-        const yT=wrapTxt(b.term, x0+14, x1-10, y, lineH);
-        if(b.frag) drawBlock(ctx,b.frag,{x0:x0+22,x1:x1-10,top:yT-lineH*0.25,bottom:y+lineH*1.6},eng,lineH*0.8);
+        const sangria=P.w*(0.08+0.05*Math.min(i,5));
+        const nd=nodoMapa(b.term,b.frag,P.w*0.84-sangria,eng,lineH);
+        nd.x=sangria; nd.y=P.h*0.24+i*(lineH*2.4); nd.peldano=true;
+        cajas.push(nd);
       });
-    } else {                                   // RADIAL (por defecto), mejor repartido
-      const cx=P.w/2, cy=P.h*0.46, rx=P.w*0.15, ry=lineH*1.6;
-      sketchEllipse(ctx,cx,cy,rx,ry,eng.ink,rng);
-      wrapTxt(mm.center||'Tema', cx-rx+20, cx+rx-14, cy+eng.fs*0.3, lineH);
+    } else {                                   // RADIAL
+      centro.x=(P.w-centro.w)/2; centro.y=P.h*0.44; formaC='globo';
+      const ancho=P.w*0.28, R=Math.min(P.w*0.34,P.h*0.30);
       branches.forEach((b,i)=>{
         const a=(i/n)*Math.PI*2 - Math.PI/2;
-        const R=Math.min(P.w*0.36,P.h*0.30);
-        const bx=cx+Math.cos(a)*R, by=cy+Math.sin(a)*R;
-        sketchLine(ctx, cx+Math.cos(a)*rx*1.05, cy+Math.sin(a)*ry*1.05, bx, by, eng.ink, rng, 2.2);
-        const half=P.w*0.14;
-        const bx0=Math.max(20,Math.min(P.w-2*half-20,bx-half));
-        const yT=wrapTxt(b.term, bx0, bx0+2*half, by+eng.fs*0.2, lineH);
-        sketchLine(ctx,bx0,yT-lineH*0.5,bx0+2*half*0.9,yT-lineH*0.5,eng.ink,rng,1.5);
-        if(b.frag) drawBlock(ctx,b.frag,{x0:bx0,x1:bx0+2*half,top:yT-lineH*0.15,bottom:yT+lineH*2.4},eng,lineH*0.88);
+        const nd=nodoMapa(b.term,b.frag,ancho,eng,lineH);
+        nd.x=Math.max(16, Math.min(P.w-nd.w-16, P.w/2+Math.cos(a)*R-nd.w/2));
+        nd.y=Math.max(16, Math.min(P.h-nd.h-24, P.h*0.44+Math.sin(a)*R));
+        cajas.push(nd);
       });
     }
+
+    separaCajas(cajas, margen, alto);
+    for(const c of cajas){                                  // que nada se salga
+      c.x=Math.max(14, Math.min(P.w-c.w-14, c.x));
+      c.y=Math.max(lineH, Math.min(P.h-c.h-lineH, c.y));
+    }
+    /* Enlaces primero, para que el texto quede por encima del trazo.
+       El radial es el unico que puede usar rectas: sus ramas salen en
+       direcciones distintas desde el centro, asi que no hay hermanos en
+       medio. Los demas bajan por un tronco y entran de lado.               */
+    const desdeY=centro.y+centro.h+lineH*0.25;
+    if(style==='radial'){
+      for(const c of cajas) enlazaCajas(ctx, centro, c, eng, rng, 2);
+    } else if(style==='espina'){
+      const yMid=centro.y+centro.h/2;
+      sketchLine(ctx, P.w*0.05, yMid, centro.x-12, yMid, eng.ink, rng, 3);   // espina
+      for(const c of cajas){
+        const px=c.x+c.w/2, arriba=(c.y+c.h)<yMid;
+        sketchLine(ctx, px, arriba? c.y+c.h+6 : c.y-8, px+(arriba?26:-26), yMid, eng.ink, rng, 1.8);
+      }
+    } else {
+      const tronco=(style==='columnas')? P.w/2 : Math.max(18, centro.x+centro.w*0.18);
+      for(const c of cajas) enlaceCodo(ctx, tronco, desdeY, c, eng, rng, 1.8);
+    }
+    pintaNodo(ctx, centro, eng, lineH, rng, formaC);
+    for(const c of cajas) pintaNodo(ctx, c, eng, lineH, rng, formaR);
+
     return [pg.canvas];
   }
 
