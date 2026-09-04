@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<title>Lupa — por qué se pierde la firma</title>
+<style>
+  body{font:14px/1.5 system-ui,sans-serif;margin:0;padding:20px;background:#fafaf7;color:#22242a}
+  h1{font-size:20px;margin:0 0 4px} .sub{color:#666;margin:0 0 16px;max-width:76ch}
+  select,button{font:inherit;padding:6px 12px;border:1px solid #c8c8c0;border-radius:7px;background:#fff}
+  button{cursor:pointer} button.p{background:#1f3f8a;color:#fff;border-color:#1f3f8a}
+  .fila{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;margin-top:18px}
+  .paso{background:#fff;border:1px solid #e2e2dc;border-radius:8px;padding:10px}
+  .paso h3{margin:0 0 6px;font-size:13px;font-weight:600;color:#444}
+  .paso small{display:block;color:#777;margin-top:6px;max-width:34ch}
+  canvas{display:block;border:1px solid #ddd;background:
+    linear-gradient(45deg,#eee 25%,transparent 25%,transparent 75%,#eee 75%),
+    linear-gradient(45deg,#eee 25%,#fff 25%,#fff 75%,#eee 75%);
+    background-size:12px 12px;background-position:0 0,6px 6px}
+  table{border-collapse:collapse;margin-top:16px;background:#fff}
+  th,td{border:1px solid #e2e2dc;padding:5px 9px;text-align:left;font-size:13px}
+  th{background:#f2f2ec}
+  .si{color:#1a7a3c;font-weight:600} .no{color:#b3261e;font-weight:600}
+  #estado{margin:10px 0;color:#555;min-height:1.4em}
+  .leyenda span{display:inline-block;margin-right:14px}
+  .pt{display:inline-block;width:10px;height:10px;border-radius:2px;vertical-align:middle;margin-right:4px}
+</style></head><body>
+
+<h1>Lupa — por qué se pierde la firma</h1>
+<p class="sub">Cuando un caso falla, la nota sola no dice <b>qué</b> falló. Esta página abre el
+proceso paso a paso sobre un único caso: dónde cree el motor que está la hoja, qué manchas
+encuentra, cuál elige, y <b>qué fragmentos descarta y por qué</b>. Encima se superpone la
+verdad conocida, así se ve exactamente qué trozo de firma se quedó fuera.</p>
+
+<label>Caso <select id="caso"></select></label>
+<label>Condición <select id="cond"></select></label>
+<button id="ver" class="p">Mirar</button>
+<div id="estado"></div>
+<div class="leyenda">
+  <span><i class="pt" style="background:#1a7a3c"></i>conservado</span>
+  <span><i class="pt" style="background:#b3261e"></i>descartado</span>
+  <span><i class="pt" style="background:#1f3f8a"></i>principal</span>
+  <span><i class="pt" style="background:rgba(255,0,180,.55)"></i>firma real (verdad)</span>
+</div>
+<div class="fila" id="pasos"></div>
+<div id="tabla"></div>
+
+<script>
+const _V="?v="+Date.now();
+const _L=["libs","fonts","db","charset","render","summarize","ai","segment","capture","scan","transcribe","audio","generate","app"];
+document.write(_L.map(n=>'<scr'+'ipt src="../js/'+n+'.js'+_V+'"><\/scr'+'ipt>').join(""));
+</script>
+<script>
+document.write('<scr'+'ipt src="casos.js'+_V+'"><\/scr'+'ipt>');
+document.write('<scr'+'ipt src="puntua.js'+_V+'"><\/scr'+'ipt>');
+</script>
+<script>
+window.APP=window.APP||{}; APP.busy=()=>{}; APP.idle=()=>{}; APP.toast=()=>{};
+function control(id,tipo,valor,marcado){
+  let el=document.getElementById(id); if(el) return el;
+  el=document.createElement('input');
+  if(tipo==='check'){ el.type='checkbox'; el.checked=!!marcado; } else { el.type='range'; el.value=valor; }
+  el.id=id; el.style.display='none'; document.body.appendChild(el); return el;
+}
+['sigThresh:50','sigQuitaNeutro:0','sigTolerancia:45','sigMinAlpha:0'].forEach(s=>{
+  const [id,v]=s.split(':'); control(id,'rango',v); });
+[['sigGrid',true],['sigColorSolo',true],['sigSoloPick',false],['sigAll',false]].forEach(([id,m])=>control(id,'check',0,m));
+
+const T=window.__MT, W=520, H=340;
+CASOS.DEFS.forEach((d,i)=>caso.add(new Option(d.nombre,i)));
+CASOS.DEGRADACIONES.forEach((d,i)=>cond.add(new Option(d.nombre,i)));
+
+const panel=(titulo, cv, nota)=>{
+  const d=document.createElement('div'); d.className='paso';
+  d.innerHTML='<h3>'+titulo+'</h3>';
+  d.appendChild(cv);
+  if(nota){ const s=document.createElement('small'); s.textContent=nota; d.appendChild(s); }
+  return d;
+};
+const copia=(src,alto)=>{ const k=alto/src.height;
+  const c=document.createElement('canvas'); c.width=Math.round(src.width*k); c.height=alto;
+  c.getContext('2d').drawImage(src,0,0,c.width,c.height); return c; };
+
+async function mirar(){
+  const pasos=document.getElementById('pasos'); pasos.innerHTML='';
+  document.getElementById('tabla').innerHTML='';
+  const def=CASOS.DEFS[+caso.value], deg=CASOS.DEGRADACIONES[+cond.value];
+  document.getElementById('estado').textContent='Construyendo la escena…';
+  await new Promise(r=>setTimeout(r,0));
+  const {escena,tinta}=await CASOS.construye(def, deg.opt, W, H);
+  const img=await new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.src=escena.toDataURL('image/png');});
+
+  if(T.limpiaDiag) T.limpiaDiag();
+  const seg=T.inkClusters(img);
+  const diag=(T.verDiag&&T.verDiag())||{};
+
+  pasos.appendChild(panel('1 · La foto', copia(escena,240), deg.nombre));
+
+  // 2 · hoja + manchas que ve inkClusters, con la verdad encima
+  const c2=document.createElement('canvas'); c2.width=W; c2.height=H;
+  const x2=c2.getContext('2d');
+  x2.drawImage(escena,0,0);
+  x2.globalAlpha=.55; x2.drawImage(tinta,0,0); x2.globalAlpha=1;   // la firma real, resaltada
+  if(seg){
+    x2.strokeStyle='#a06a00'; x2.lineWidth=2; x2.setLineDash([6,4]);
+    x2.strokeRect(seg.sheet.x0,seg.sheet.y0,seg.sheet.x1-seg.sheet.x0,seg.sheet.y1-seg.sheet.y0);
+    x2.setLineDash([]);
+    for(const o of seg.comps){ x2.strokeStyle='rgba(40,80,200,.75)'; x2.lineWidth=1;
+      x2.strokeRect(o.x0,o.y0,o.x1-o.x0,o.y1-o.y0); }
+    const g=seg.clusters[0];
+    x2.strokeStyle='#1f3f8a'; x2.lineWidth=3; x2.strokeRect(g.x0,g.y0,g.x1-g.x0,g.y1-g.y0);
+  }
+  pasos.appendChild(panel('2 · Hoja, manchas y elegida', copia(c2,240),
+    seg? ('hoja a rayas · '+seg.comps.length+' manchas · la gruesa es la elegida'+
+          (diag.reintento? ' · REINTENTO: '+diag.reintento : ''))
+       : 'inkClusters devolvio null: el banco usaria la imagen entera'));
+
+  // 3 · el recorte que recibe extractTight
+  const g=(seg&&seg.clusters[0])||{x0:0,y0:0,x1:W,y1:H};
+  const px=Math.max(8,(g.x1-g.x0)*0.10), pa=Math.max(px,(g.y1-g.y0)*0.30);
+  const rx=Math.max(0,g.x0-px), ry=Math.max(0,g.y0-pa);
+  const cc=document.createElement('canvas');
+  cc.width=Math.round(Math.min(W,g.x1+px)-rx); cc.height=Math.round(Math.min(H,g.y1+px)-ry);
+  cc.getContext('2d').drawImage(img,rx,ry,cc.width,cc.height,0,0,cc.width,cc.height);
+  pasos.appendChild(panel('3 · Lo que recibe extractTight', copia(cc,240), cc.width+'x'+cc.height));
+
+  // 4 · las decisiones de extractTight
+  const crop=await new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.src=cc.toDataURL('image/png');});
+  const lupa={}; let pz=null, err='';
+  try{ pz=T.extractTight(crop,50,lupa); }catch(e){ err=e.message; }
+
+  if(lupa.comps){
+    const c4=document.createElement('canvas'); c4.width=lupa.w; c4.height=lupa.h;
+    const x4=c4.getContext('2d');
+    x4.drawImage(cc,0,0,lupa.w,lupa.h);
+    x4.globalAlpha=.25; x4.fillStyle='#fff'; x4.fillRect(0,0,lupa.w,lupa.h); x4.globalAlpha=1;
+    for(const o of lupa.comps){
+      x4.strokeStyle = o.principal? '#1f3f8a' : (o.conservado? '#1a7a3c' : '#b3261e');
+      x4.lineWidth = o.principal? 3 : 2;
+      x4.strokeRect(o.x0,o.y0,o.x1-o.x0+1,o.y1-o.y0+1);
+    }
+    pasos.appendChild(panel('4 · Qué conserva y qué tira', copia(c4,240),
+      lupa.comps.length+' componentes · radio fijo '+Math.round(lupa.radio)+' px alrededor del principal'));
+
+    const tir=lupa.comps.filter(o=>!o.conservado);
+    let html='<table><tr><th>#</th><th>caja</th><th>px</th><th>diag</th><th>¿entra?</th><th>por qué</th></tr>';
+    lupa.comps.slice().sort((a,b)=>b.diag-a.diag).forEach((o,i)=>{
+      html+='<tr><td>'+(i+1)+'</td><td>'+(o.x1-o.x0+1)+'x'+(o.y1-o.y0+1)+'</td><td>'+o.n+'</td>'+
+            '<td>'+Math.round(o.diag)+'</td><td class="'+(o.conservado?'si':'no')+'">'+
+            (o.conservado?'sí':'NO')+'</td><td>'+o.porque+'</td></tr>';
+    });
+    html+='</table>';
+    if(tir.length) html='<p><b>'+tir.length+' componentes descartados.</b> Si alguno de ellos es firma, ahí está la pérdida.</p>'+html;
+    document.getElementById('tabla').innerHTML=html;
+  }
+
+  if(pz){
+    pasos.appendChild(panel('5 · Resultado', copia(pz.canvas,240), pz.w+'x'+pz.h));
+    const s=PUNTUA.puntua(pz.canvas,tinta);
+    document.getElementById('estado').textContent=
+      'conserva '+Math.round(s.conserva*100)+'% · limpieza '+Math.round(s.limpieza*100)+'%'+
+      ' — '+s.acierto+' ok / '+s.falso+' de mas / '+s.perdido+' perdido';
+  } else {
+    document.getElementById('estado').textContent='extractTight fallo: '+err;
+  }
+}
+document.getElementById('ver').onclick=()=>mirar().catch(e=>{
+  document.getElementById('estado').textContent='Error: '+e.message; });
+</script>
+</body></html>

@@ -2043,7 +2043,11 @@ const GENERATE = (() => {
     if(tinta<40) return false;
     return (tinta/N) < 0.34;
   }
-  function extractTight(img, sens){
+  /* 'lupa' es un objeto opcional donde extractTight deja lo que ha decidido:
+     los componentes que encontro, cual eligio como principal y cuales
+     conservo o descarto. No cambia nada del comportamiento; existe porque
+     sin verlo se acaba tocando filtros a ciegas, y ya paso una vez.        */
+  function extractTight(img, sens, lupa){
     const nw=img.naturalWidth||img.width, nh=img.naturalHeight||img.height;
     // no achicar recortes chicos; si son diminutos, AMPLIAR para conservar el trazo
     let sc=Math.min(1,1400/Math.max(nw,nh));
@@ -2278,6 +2282,16 @@ const GENERATE = (() => {
        manchas en inkClusters.                                               */
     const m=comps[0], mx0=m.x0-m.diag*0.25, mx1=m.x1+m.diag*0.25, my0=m.y0-m.diag*0.25, my1=m.y1+m.diag*0.25;
     const keepC=comps.filter(o=>o===m || (o.x1>=mx0&&o.x0<=mx1&&o.y1>=my0&&o.y0<=my1&&o.diag>m.diag*0.05));
+    if(lupa){
+      lupa.escala=sc; lupa.w=w; lupa.h=h;
+      lupa.radio=m.diag*0.25;
+      lupa.comps=comps.map(o=>({x0:o.x0,y0:o.y0,x1:o.x1,y1:o.y1,n:o.n,diag:o.diag,
+        principal:o===m, conservado:keepC.indexOf(o)>=0,
+        porque: o===m? 'principal'
+              : (o.diag<=m.diag*0.05? 'descartado: demasiado pequeno'
+              : (!(o.x1>=mx0&&o.x0<=mx1&&o.y1>=my0&&o.y0<=my1)? 'descartado: fuera del radio'
+              : 'conservado: dentro del radio'))}));
+    }
     const keep=new Uint8Array(N); for(const o of keepC) for(const q of o.px) keep[q]=1;
     /* COLOR REAL DE LA TINTA.
        La tinta fotografiada sobre papel de color sale MEZCLADA con el papel:
