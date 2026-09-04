@@ -40,7 +40,7 @@ conserva ni debe conservar: penalizaba un 20% sin que faltara nada.
 
 ---
 
-## Estado actual: media 80 / 81 sobre 68 pruebas
+## Estado actual: media 81 / 82 sobre 68 pruebas
 
 Ordenado de peor a mejor:
 
@@ -48,7 +48,7 @@ Ordenado de peor a mejor:
 |---|---|---|
 | Firma IGUAL de tenue que la cuadrícula | **36** | **22** |
 | Firma IGUAL de tenue que las rayas | **54** | **59** |
-| Azul sobre formulario con recuadros | **73*** | **72*** |
+
 | Verde + sello azul, cuaderno amarillo | **73** | 95 |
 | Roja sobre texto impreso y rayas | **78** | **76** |
 | Bolígrafo que se queda sin tinta | 78 | 79 |
@@ -59,19 +59,16 @@ Ordenado de peor a mejor:
 | Reflejo de flash sobre el papel | 88 | 88 |
 | Firma pequeña con mucho fondo | 89 | 85 |
 | Papel arrugado con pliegues | 89 | 90 |
+| Azul sobre formulario con recuadros | 92 | 87 |
 | Negra con sombra fuerte | 89 | 91 |
 | Cuaderno sobre mesa oscura | 92 | 91 |
 | Dos firmas: debe quedarse con una | 93 | 92 |
 | Azul sobre papel blanco | 94 | 91 |
 
-**\* Ojo con el formulario:** ese 73/72 **no es una nota, es un respaldo**. En
-tres de sus cuatro condiciones `inkClusters` devuelve `null` y el banco cae al
-recuadro de la imagen entera. Ver más abajo.
-
 **Aviso al comparar cifras:** los 15 primeros casos daban media 85/86. Los dos
 casos IGUAL de tenue se añadieron después, a propósito, como límite duro: son
 firmas pintadas **exactamente con el mismo color y la misma opacidad** que la
-cuadrícula o las rayas de la hoja. Bajan la media a 80/81 y ahí es donde está
+cuadrícula o las rayas de la hoja. Bajan la media a 81/82 y ahí es donde está
 el trabajo.
 
 ---
@@ -263,46 +260,61 @@ la misma clase de tinta (relleno y halo parecidos).
 
 ---
 
-## El peor caso, diseccionado
+## El caso del formulario: RESUELTO, y la causa no era la que parecía
 
-`Azul sobre formulario` lleva clavado en 73/72 y se comporta **al revés** de lo
-esperable:
+`Azul sobre formulario` llevaba clavado en 73/72 y se comportaba **al revés**
+de lo esperable: con la foto nítida daba 17/34 y con las degradadas 97/91.
 
-| Condición | Nota | Umbral | Qué devuelve `inkClusters` |
-|---|---|---|---|
-| **nítida** | **17 / 34** | 87 | `null` |
-| foto de móvil | 97 / 91 | 74 | `null` |
-| foto mala | 97 / 90 | 76 | `null` |
-| de lado | 81 / 73 | 62 | ok |
+**La causa real era la detección de hoja.** La hoja se define como la mayor
+isla de papel, y los recuadros impresos **parten el papel**: salía `498×141`
+sobre una imagen de 520×340 — era el recuadro de *NOMBRE* — y la firma, que
+vive en el recuadro de *FIRMA* más abajo, quedaba **fuera**. Por eso solo
+había 654 px de tinta: eran restos. Y por eso «de lado» era la única condición
+que funcionaba: la perspectiva rompe los rectángulos y la hoja pasa a ser la
+imagen entera.
 
-Es decir: **cuanto mejor es la foto, peor sale**, y en tres de las cuatro
-condiciones el motor no participa — el banco usa el recuadro de la imagen
-entera y `extractTight` acierta por su cuenta. Las notas altas de esa columna
-no miden lo que parece.
+**El arreglo** no cambia la definición de hoja — redefinirla como unión de
+islas ya se probó y rompió las fotos reales. Solo **reintenta con la imagen
+entera cuando el primer intento no encuentra nada**. Un caso que ya funciona
+nunca llega a ese camino, así que no puede empeorar.
 
-La cadena completa, medida:
+| Condición | Antes | Ahora |
+|---|---|---|
+| nítida | 17 / 34 | **97 / 91** |
+| foto de móvil | 97 / 91 | 97 / 91 |
+| foto mala | 97 / 90 | 95 / 90 |
+| de lado | 81 / 73 | 81 / 73 |
+| **media del caso** | **73 / 72** | **92 / 87** |
 
-1. Los bordes del formulario son **periódicos**, así que el filtro de rejilla
-   los detecta y se lleva el **65% de la tinta** — con la firma pegada a ellos.
-2. Lo que sobrevive (654 px) se agrupa en una mancha de ~31×31 con `fill=0,63`.
-3. El scoring exige `fill < 0,55`. Nadie puntúa. `null`.
+Media global: 80/81 → **81/82**, con los otros 16 casos idénticos.
 
-**Intento fallido, por si evita repetirlo:** Otsu de dos niveles. El
-razonamiento es correcto — Otsu parte en DOS clases y aquí hay TRES (papel,
-bolígrafo, impreso), y por eso el corte cae entre lo impreso y el resto
-dejando el bolígrafo del lado del papel; en la foto sucia el ruido rellena el
-centro del histograma y arrastra el umbral por debajo de la tinta, que es lo
-que salva a las degradadas. Se implementó, hubo que moverlo **después** de
-quitar la rejilla y bajar el suelo del segundo umbral de 22 a 10, y entonces
-sí se activa (654 px → 1307 en 8 componentes). La media no se movió ni una
-décima: 80/81 antes y después. Revertido.
+### Rectas de una casilla ≠ trama periódica
 
-Los dos frentes que quedan abiertos:
+Los ejes se buscan ahora por la **tirada continua más larga** de cada fila y
+columna, no por cuántos píxeles tiene. Una raya es un trazo que cruza la hoja;
+una fila de firma suma lo mismo repartido en trozos cortos. Con el conteo
+antiguo, el formulario **se detectaba a sí mismo como rejilla**: el garabato
+mide el 60% del ancho y sus filas pasaban el umbral.
 
-- La rejilla **no debería tocar los bordes de una casilla**: son cuatro rectas,
-  no una trama periódica. Hace falta distinguirlas.
-- La guarda de `fill` debería mirar la **forma** del trazo, no solo cuánto
-  llena su caja.
+Dos detalles que hubo que medir:
+
+- La tirada **tolera huecos de 2 px**. Con tiradas estrictas los dos casos
+  límite caían de 36/22 y 54/59 a **30/21 y 52/53**: una raya fotografiada se
+  parte por el ruido y dejaba de detectarse.
+- **Cobertura mínima**: del primer eje al último hay que cruzar más de media
+  hoja. Es lo que separa una trama de cuatro rectas encerrando un recuadro.
+
+### Aviso metodológico que costó un diagnóstico entero
+
+`sigDiag` solo se limpiaba en el flujo real de la app. Los bancos llaman a
+`inkClusters` directamente y leían **claves heredadas de la llamada anterior**
+como si fueran de esta. Por eso una versión anterior de este documento
+afirmaba que el filtro de rejilla se comía el 65% de la tinta del formulario:
+esa cifra era de otro caso, y el filtro **nunca se activó ahí**. Ya se puede
+limpiar desde fuera y el banco lo hace en cada prueba.
+
+Sirva de advertencia: un diagnóstico que arrastra estado entre llamadas es
+peor que no tener diagnóstico, porque parece que mide.
 
 ---
 
@@ -317,10 +329,14 @@ Los dos frentes que quedan abiertos:
 2. **¿Cómo elegir la firma principal cuando hay varias?** Tamaño, posición,
    grosor de trazo, cercanía a la palabra FIRMA…
 
-3. **¿Cómo separar una firma de la casilla impresa que toca**, sin que borrar la
-   línea deje fragmentos que luego se cuelan? Ver la disección de más arriba:
-   el filtro de rejilla se lleva el 65% de la tinta y el resto muere en la
-   guarda de `fill`.
+3. **Unir fragmentos de una misma firma sin absorber sombras.** El cierre
+   transitivo se probó y falló (80/81 → 79/80): al crecer la caja crece el
+   radio y alcanza el fondo. La propuesta pendiente es un **grafo de
+   afinidad** con radio FIJO, donde cada arista puntúe cercanía + misma clase
+   de tinta + grosor + orientación + continuidad, y se penalice la linealidad
+   perfecta. Es el siguiente candidato: ahora que el formulario está resuelto,
+   los dos peores casos son los límite (36/22 y 54/59) y ahí el problema es
+   fragmentación pura.
 
 4. **¿Merece la pena un umbral adaptativo por regiones** (tipo Sauvola /
    Niblack) en vez de un Otsu global sobre el recorte?
@@ -330,5 +346,5 @@ Los dos frentes que quedan abiertos:
 ---
 
 *Cualquier propuesta se puede validar en minutos: abrir `pruebas/firmas.html`,
-pulsar Ejecutar el banco, y comparar contra la media 80/81 sobre 68 pruebas.
+pulsar Ejecutar el banco, y comparar contra la media 81/82 sobre 68 pruebas.
 Si una idea no mejora ahí, no mejora.*
