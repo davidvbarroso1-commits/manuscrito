@@ -80,6 +80,7 @@ async function ejecuta(soloColor){
       let res=null, err=null, recorte=null, caja=null;
       try{
         const img=await new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.src=escena.toDataURL('image/png');});
+        if(T.limpiaDiag) T.limpiaDiag();   // sin esto se leen claves de la prueba anterior
         const seg=T.inkClusters(img);
         const g=(seg&&seg.clusters[0])||{x0:0,y0:0,x1:W,y1:H};
         const px=Math.max(8,(g.x1-g.x0)*0.10), pa=Math.max(px,(g.y1-g.y0)*0.30);

@@ -1554,8 +1554,32 @@ const GENERATE = (() => {
      siguiente; un trazo de firma no cumple ni una cosa ni la otra.          */
   function ejesPeriodicos(mask, w, h, x0, y0, x1, y1){
     const anchoS=x1-x0+1, altoS=y1-y0+1;
+    /* Se mide la TIRADA CONTINUA mas larga de cada fila y columna, no cuantos
+       pixeles tiene. Es la diferencia entre una raya y una firma: la raya es
+       un solo trazo que cruza la hoja; una fila de firma suma los mismos
+       pixeles pero repartidos en muchos trozos cortos.
+       Contando pixeles, el caso "azul sobre formulario" se detectaba a SI
+       MISMO como rejilla: ese formulario solo tiene dos rectangulos, pero el
+       garabato mide el 60% del ancho, sus filas pasaban el umbral y quedaban
+       lo bastante regulares como para dar un periodo de 30. Se borraba el 65%
+       de la firma por eso.                                                   */
+    /* La tirada tolera huecos de hasta 2 px. Una raya fotografiada se parte
+       por el ruido y la compresion, y midiendo tiradas estrictas dejaba de
+       detectarse en cuanto la foto no era perfecta: los dos casos limite
+       caian de 36/22 y 54/59 a 30/21 y 52/53. Dos pixeles no salvan a una
+       fila de firma, cuyos huecos son mucho mayores.                        */
+    const HUECO=2;
     const colN=new Int32Array(w), filN=new Int32Array(h);
-    for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++) if(mask[y*w+x]){ colN[x]++; filN[y]++; }
+    for(let y=y0;y<=y1;y++){ let run=0, hueco=0;
+      for(let x=x0;x<=x1;x++){
+        if(mask[y*w+x]){ run+=hueco+1; hueco=0; if(run>filN[y]) filN[y]=run; }
+        else if(run){ hueco++; if(hueco>HUECO){ run=0; hueco=0; } }
+      } }
+    for(let x=x0;x<=x1;x++){ let run=0, hueco=0;
+      for(let y=y0;y<=y1;y++){
+        if(mask[y*w+x]){ run+=hueco+1; hueco=0; if(run>colN[x]) colN[x]=run; }
+        else if(run){ hueco++; if(hueco>HUECO){ run=0; hueco=0; } }
+      } }
     const eje=(cuenta, ini, fin, largo)=>{
       const cand=[];
       for(let i=ini;i<=fin;i++) if(cuenta[i] > largo*0.55) cand.push(i);
@@ -1573,12 +1597,30 @@ const GENERATE = (() => {
       if(med<6) return null;
       let ok=0; for(const g of hu) if(Math.abs(g-med) <= Math.max(2, med*0.25)) ok++;
       if(ok < hu.length*0.7) return null;                  // huecos irregulares: no es rejilla
+      /* Y que sea una TRAMA, no los bordes de una casilla. Una cuadricula se
+         repite a lo largo de toda la hoja; dos o cuatro rectas encerrando un
+         recuadro ocupan su sitio y ya. Se exige que del primer eje al ultimo
+         se cubra mas de la mitad de la hoja.                                */
+      const cobertura=(ejes[ejes.length-1]-ejes[0])/Math.max(1,fin-ini+1);
+      if(cobertura < 0.5) return null;
       return {ejes, periodo:med};
     };
     const V=eje(colN, x0, x1, altoS), H=eje(filN, y0, y1, anchoS);
     return (V||H)? {V,H} : null;
   }
-  function inkClusters(img){
+  /* 'hojaEntera' es el segundo intento. La hoja se define como la mayor isla
+     de papel, y en un formulario los recuadros impresos PARTEN el papel: en
+     el caso del banco la hoja salia 498x141 -- el recuadro de NOMBRE -- y la
+     firma, que vive en el de FIRMA mas abajo, quedaba FUERA. De ahi que solo
+     hubiera 654 px de tinta y que se devolviera null en tres de las cuatro
+     condiciones; la cuarta ("de lado") funciona justamente porque la
+     perspectiva rompe los rectangulos y la hoja pasa a ser la imagen entera.
+     Definir la hoja como union de islas ya se probo y rompio las fotos
+     reales del usuario (ver la nota de arriba), asi que aqui no se cambia la
+     definicion: solo se REINTENTA con la imagen entera cuando el primer
+     intento no encuentra nada. Un caso que ya funciona no llega a este
+     camino, asi que no puede empeorar.                                     */
+  function inkClusters(img, hojaEntera){
     const W=img.naturalWidth||img.width, H=img.naturalHeight||img.height;
     const sc=Math.min(1, 900/Math.max(W,H));
     const w=Math.max(8,Math.round(W*sc)), h=Math.max(8,Math.round(H*sc));
@@ -1615,10 +1657,14 @@ const GENERATE = (() => {
        de verdad mandan sobre el caso sintetico, asi que se revierte.
        Para hacerlo bien habria que acotar la union a las islas que compartan
        nivel de gris y esten pegadas, no a todas las grandes.               */
-    const pbig=blobs(isPaper,w,h,false,Math.round(N*0.02)).sort((a,b)=>b.n-a.n)[0];
+    const pbig=hojaEntera? null : blobs(isPaper,w,h,false,Math.round(N*0.02)).sort((a,b)=>b.n-a.n)[0];
     const sheet=pbig||{x0:0,y0:0,x1:w-1,y1:h-1,n:N};
     const sx0=sheet.x0, sy0=sheet.y0, sx1=sheet.x1, sy1=sheet.y1;
     const sw=sx1-sx0+1, sh=sy1-sy0+1, Ns=sw*sh;
+    const reintenta=(porque)=>{
+      anotaDiag('reintento', porque+' con la hoja en '+sw+'x'+sh+'; repito con la imagen entera');
+      return inkClusters(img, true);
+    };
 
     /* PAPEL LOCAL, no global. Con luz desigual (viñeteado, sombra de la mano,
        flash) el papel no vale lo mismo en toda la foto: las esquinas oscuras
@@ -1833,7 +1879,7 @@ const GENERATE = (() => {
         anotaDiag('rescateRectas', quitados+' px de recta -> '+comps.length+' componentes');
       }
     }
-    if(!comps.length) return null;
+    if(!comps.length) return hojaEntera? null : reintenta('ningun componente');
 
     /* Agrupa trazos cercanos (union-find sobre cajas dilatadas).
        El emparejado es CUADRATICO, asi que con cientos de componentes la
@@ -1936,7 +1982,7 @@ const GENERATE = (() => {
       anotaDiag('nadiePuntua', cl.length+' manchas; la mayor: fill='+g.fill.toFixed(3)+
         ' halo='+g.halo.toFixed(2)+' rel='+(area/Ns).toFixed(3)+' partes='+g.parts);
     }
-    if(!buenos.length) return null;
+    if(!buenos.length) return hojaEntera? null : reintenta('ninguna mancha puntuo');
     return { clusters: buenos.slice(0,8).map(box),
              byId,
              comps: comps.map(o=>({ x0:o.x0*kx, y0:o.y0*ky, x1:(o.x1+1)*kx, y1:(o.y1+1)*ky,
@@ -2405,8 +2451,16 @@ const GENERATE = (() => {
      Cuando un recorte sale mal no sirve de nada adivinar: hace falta saber
      que decidio cada paso. Esto reune las cifras reales del ultimo recorte
      para poder pegarlas en una consulta, sin tener que mandar la foto.     */
+  /* OJO: sigDiag se limpiaba SOLO en useSigBlob, el flujo real de la app.
+     Cualquiera que llame a inkClusters o extractTight por su cuenta -- los
+     bancos de pruebas, por ejemplo -- se encontraba claves heredadas de la
+     llamada anterior y las leia como si fueran de esta. Me costo un
+     diagnostico entero: di por hecho que el filtro de rejilla se comia el
+     65% de la tinta de un caso, cuando esa cifra era de otro.
+     Ahora se puede limpiar desde fuera, y los bancos lo hacen.              */
   let sigDiag={};
   function anotaDiag(k,v){ try{ sigDiag[k]=v; }catch(e){} }
+  function limpiaDiag(){ sigDiag={}; }
   function informeFirma(){
     const d=sigDiag, L=[];
     L.push('DIAGNOSTICO DE FIRMA — Manuscrito');
@@ -3884,6 +3938,6 @@ const GENERATE = (() => {
     }catch(e){ console.error(e); APP.idle(); APP.toast('No se pudo crear el PDF'); }
   }
 
-  window.__MT=Object.assign(window.__MT||{},{inkClusters,informeFirma,verDiag:()=>JSON.parse(JSON.stringify(sigDiag)),refineBox,extractTight,esTrazo,partirEstructura,planTabla,lineasDePagina,textoConTablas,ocrDePaginaPDF,rasterizaPaginaPDF,docxHtmlAMarcas,bordesDe,caminosDe,dibujaCroquis,registraDibujo,findInkRegion,aplicarDesgaste,aplicarIntensidad,aplicarGrosor,limpiaFirma,rebuildTint});
+  window.__MT=Object.assign(window.__MT||{},{inkClusters,limpiaDiag,informeFirma,verDiag:()=>JSON.parse(JSON.stringify(sigDiag)),refineBox,extractTight,esTrazo,partirEstructura,planTabla,lineasDePagina,textoConTablas,ocrDePaginaPDF,rasterizaPaginaPDF,docxHtmlAMarcas,bordesDe,caminosDe,dibujaCroquis,registraDibujo,findInkRegion,aplicarDesgaste,aplicarIntensidad,aplicarGrosor,limpiaFirma,rebuildTint});
   return { init, bind, populateFonts };
 })();
