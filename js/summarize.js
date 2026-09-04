@@ -139,23 +139,79 @@ const SUMMARIZE = (() => {
   }
 
   // devuelve string u objeto según formato
+  /* ── LO QUE NO SE RESUME ──────────────────────────────────────────────
+     Una tabla resumida deja de ser una tabla: el resumidor la trataba como
+     prosa y devolvia las barras metidas dentro del texto corrido. Lo mismo
+     con las formulas, los mapas y los dibujos.
+     Aqui el texto se parte en tramos: los bloques con estructura se guardan
+     TAL CUAL y solo se resume la prosa que hay entre ellos. Cada tramo se
+     resume por separado a proposito, asi lo que se dice de una tabla se
+     queda junto a su tabla en vez de irse al principio del apunte.
+     Las marcas son las que entiende partirEstructura() en generate.js; si
+     alli se anade una nueva, hay que anadirla aqui.                        */
+  const MARCAS = {
+    tabla:   /^\s*\|/,
+    formula: /^\s*\$\$/,
+    salto:   /^\s*={3,}\s*$/,
+    dibujo:  /^\s*@@\s*dibujo\s*:/i,
+    mapaIni: /^\s*@@\s*mapa\s*$/i,
+    mapaFin: /^\s*@@\s*$/
+  };
+  function partirEnTramos(text){
+    const lineas=String(text||'').replace(/\r/g,'').split('\n');
+    const tramos=[]; let prosa=[], enMapa=false, mapa=[];
+    const cierraProsa=()=>{ if(prosa.length){ tramos.push({tipo:'prosa', txt:prosa.join('\n')}); prosa=[]; } };
+    for(const l of lineas){
+      if(enMapa){
+        mapa.push(l);
+        if(MARCAS.mapaFin.test(l)){ tramos.push({tipo:'crudo', txt:mapa.join('\n')}); mapa=[]; enMapa=false; }
+        continue;
+      }
+      if(MARCAS.mapaIni.test(l)){ cierraProsa(); enMapa=true; mapa=[l]; continue; }
+      if(MARCAS.tabla.test(l) || MARCAS.formula.test(l) ||
+         MARCAS.salto.test(l) || MARCAS.dibujo.test(l)){
+        // las filas seguidas de una tabla se pegan en un solo tramo crudo
+        const ant=tramos[tramos.length-1];
+        if(ant && ant.tipo==='crudo' && !prosa.length) ant.txt+='\n'+l;
+        else { cierraProsa(); tramos.push({tipo:'crudo', txt:l}); }
+        continue;
+      }
+      prosa.push(l);
+    }
+    if(enMapa && mapa.length) tramos.push({tipo:'crudo', txt:mapa.join('\n')});
+    cierraProsa();
+    return tramos;
+  }
+  /* Solo para los formatos que devuelven TEXTO. Cornell, mapa, flashcards y
+     boxing devuelven objetos con su propia forma, y ahi esto no aplica.    */
+  function respetandoEstructura(text, fn){
+    const tramos=partirEnTramos(text);
+    if(tramos.length<2 && (!tramos[0] || tramos[0].tipo==='prosa')) return fn(text);
+    const salida=[];
+    for(const t of tramos){
+      if(t.tipo==='crudo'){ salida.push(t.txt); continue; }
+      const r=(fn(t.txt)||'').trim();
+      if(r) salida.push(r);
+    }
+    return salida.join('\n\n');
+  }
   function format(text, fmt){
     text=(text||'').trim();
     if(!text) return fmt==='cornell'?{cues:[],notes:[],summary:''}:(fmt==='flashcards'||fmt==='boxing')?[]:fmt==='mapa'?{center:'',branches:[]}:'';
     switch(fmt){
       case 'completo':   return text;
-      case 'ideas':      return resumen(text, 0.34);
-      case 'esquema':    return esquema(text);
-      case 'outline':    return outline(text);
-      case 'glosario':   return glosario(text);
-      case 'feynman':    return feynman(text);
-      case 'preguntas':  return preguntas(text);
+      case 'ideas':      return respetandoEstructura(text, t=>resumen(t, 0.34));
+      case 'esquema':    return respetandoEstructura(text, esquema);
+      case 'outline':    return respetandoEstructura(text, outline);
+      case 'glosario':   return respetandoEstructura(text, glosario);
+      case 'feynman':    return respetandoEstructura(text, feynman);
+      case 'preguntas':  return respetandoEstructura(text, preguntas);
       case 'cornell':    return cornell(text);
       case 'flashcards': return flashcards(text);
       case 'boxing':     return boxes(text);
       case 'mapa':       return mindmap(text);
       case 'resumen':
-      default:           return resumen(text, 0.5);
+      default:           return respetandoEstructura(text, t=>resumen(t, 0.5));
     }
   }
 
