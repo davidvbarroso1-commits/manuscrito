@@ -48,7 +48,7 @@ Ordenado de peor a mejor:
 |---|---|---|
 | Firma IGUAL de tenue que la cuadrícula | **36** | **22** |
 | Firma IGUAL de tenue que las rayas | **54** | **59** |
-| Azul sobre formulario con recuadros | **73** | **72** |
+| Azul sobre formulario con recuadros | **73*** | **72*** |
 | Verde + sello azul, cuaderno amarillo | **73** | 95 |
 | Roja sobre texto impreso y rayas | **78** | **76** |
 | Bolígrafo que se queda sin tinta | 78 | 79 |
@@ -63,6 +63,10 @@ Ordenado de peor a mejor:
 | Cuaderno sobre mesa oscura | 92 | 91 |
 | Dos firmas: debe quedarse con una | 93 | 92 |
 | Azul sobre papel blanco | 94 | 91 |
+
+**\* Ojo con el formulario:** ese 73/72 **no es una nota, es un respaldo**. En
+tres de sus cuatro condiciones `inkClusters` devuelve `null` y el banco cae al
+recuadro de la imagen entera. Ver más abajo.
 
 **Aviso al comparar cifras:** los 15 primeros casos daban media 85/86. Los dos
 casos IGUAL de tenue se añadieron después, a propósito, como límite duro: son
@@ -239,9 +243,66 @@ de transparencia a 720×875 al 29% — media foto pegada.
 **Aflojar el umbral cuando el contraste es flojo.** El caso azul claro casi del
 color del papel empeora de 86/71 a **71/42**: aflojar arrastra papel.
 
+**Otsu de dos niveles** para separar papel / bolígrafo / impreso. Se activa
+correctamente tras dos correcciones, pero la media no se mueve: 80/81. Ver la
+disección del formulario.
+
+**Restar la rejilla por nivel dentro de `extractTight`** (tres versiones).
+Media clavada en 80/81 en las tres: ruido.
+
+**Hacer crecer la caja de `keep` por cierre transitivo.** 80/81 → 79/80.
+
+**RMBG-1.4 en el navegador** (transformers.js) como extractor. Gana **0 de 10**
+casos: 98/95 → 24/54 en el más fácil. Está entrenado con personas y objetos, y
+en una foto de cuaderno segmenta **la hoja**, no el trazo. Además tarda minutos
+por imagen. El banco quedó montado en `pruebas/rmbg.html` para el siguiente.
+
 **Absorber manchas cercanas solo por distancia.** Una sombra junto a la firma se
 absorbía: negra con sombra caía de 93/97 a **19/39**. Hizo falta exigir que sea
 la misma clase de tinta (relleno y halo parecidos).
+
+---
+
+## El peor caso, diseccionado
+
+`Azul sobre formulario` lleva clavado en 73/72 y se comporta **al revés** de lo
+esperable:
+
+| Condición | Nota | Umbral | Qué devuelve `inkClusters` |
+|---|---|---|---|
+| **nítida** | **17 / 34** | 87 | `null` |
+| foto de móvil | 97 / 91 | 74 | `null` |
+| foto mala | 97 / 90 | 76 | `null` |
+| de lado | 81 / 73 | 62 | ok |
+
+Es decir: **cuanto mejor es la foto, peor sale**, y en tres de las cuatro
+condiciones el motor no participa — el banco usa el recuadro de la imagen
+entera y `extractTight` acierta por su cuenta. Las notas altas de esa columna
+no miden lo que parece.
+
+La cadena completa, medida:
+
+1. Los bordes del formulario son **periódicos**, así que el filtro de rejilla
+   los detecta y se lleva el **65% de la tinta** — con la firma pegada a ellos.
+2. Lo que sobrevive (654 px) se agrupa en una mancha de ~31×31 con `fill=0,63`.
+3. El scoring exige `fill < 0,55`. Nadie puntúa. `null`.
+
+**Intento fallido, por si evita repetirlo:** Otsu de dos niveles. El
+razonamiento es correcto — Otsu parte en DOS clases y aquí hay TRES (papel,
+bolígrafo, impreso), y por eso el corte cae entre lo impreso y el resto
+dejando el bolígrafo del lado del papel; en la foto sucia el ruido rellena el
+centro del histograma y arrastra el umbral por debajo de la tinta, que es lo
+que salva a las degradadas. Se implementó, hubo que moverlo **después** de
+quitar la rejilla y bajar el suelo del segundo umbral de 22 a 10, y entonces
+sí se activa (654 px → 1307 en 8 componentes). La media no se movió ni una
+décima: 80/81 antes y después. Revertido.
+
+Los dos frentes que quedan abiertos:
+
+- La rejilla **no debería tocar los bordes de una casilla**: son cuatro rectas,
+  no una trama periódica. Hace falta distinguirlas.
+- La guarda de `fill` debería mirar la **forma** del trazo, no solo cuánto
+  llena su caja.
 
 ---
 
@@ -257,7 +318,9 @@ la misma clase de tinta (relleno y halo parecidos).
    grosor de trazo, cercanía a la palabra FIRMA…
 
 3. **¿Cómo separar una firma de la casilla impresa que toca**, sin que borrar la
-   línea deje fragmentos que luego se cuelan? (73/72 y no sube.)
+   línea deje fragmentos que luego se cuelan? Ver la disección de más arriba:
+   el filtro de rejilla se lleva el 65% de la tinta y el resto muere en la
+   guarda de `fill`.
 
 4. **¿Merece la pena un umbral adaptativo por regiones** (tipo Sauvola /
    Niblack) en vez de un Otsu global sobre el recorte?
