@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<title>RMBG contra el motor propio — recorte de firmas</title>
+<style>
+  body{font:14px/1.5 system-ui,sans-serif;margin:0;padding:20px;background:#fafaf7;color:#22242a}
+  h1{font-size:20px;margin:0 0 4px} .sub{color:#666;margin:0 0 16px;max-width:70ch}
+  button{font:inherit;padding:7px 14px;border:1px solid #c8c8c0;border-radius:7px;background:#fff;cursor:pointer}
+  button.p{background:#1f3f8a;color:#fff;border-color:#1f3f8a}
+  table{border-collapse:collapse;width:100%;margin-top:16px;background:#fff}
+  th,td{border:1px solid #e2e2dc;padding:7px 9px;text-align:left;vertical-align:middle}
+  th{background:#f2f2ec;font-weight:600}
+  td.n{text-align:right;font-variant-numeric:tabular-nums}
+  .bien{color:#1a7a3c;font-weight:600} .mal{color:#b3261e;font-weight:600} .reg{color:#a06a00;font-weight:600}
+  #estado{margin:10px 0;color:#555;min-height:1.4em}
+  canvas{border:1px solid #ddd;vertical-align:middle;background:
+    linear-gradient(45deg,#eee 25%,transparent 25%,transparent 75%,#eee 75%),
+    linear-gradient(45deg,#eee 25%,#fff 25%,#fff 75%,#eee 75%);
+    background-size:12px 12px;background-position:0 0,6px 6px}
+  .resumen{margin-top:18px;padding:12px 14px;background:#fff;border:1px solid #e2e2dc;border-radius:8px}
+</style></head><body>
+
+<h1>RMBG contra el motor propio</h1>
+<p class="sub">Pregunta concreta: ¿un modelo de quitar fondo entrenado con fotos generales
+sirve para separar la tinta de una firma del papel? Se mide con <b>la misma regla</b> que el
+banco de firmas (<code>puntua.js</code>) y sobre <b>la misma escena</b>, así que las dos
+columnas son directamente comparables. La sospecha previa es que el modelo va a segmentar
+<i>la hoja</i> y no el trazo; esto lo confirma o lo desmiente con números.</p>
+
+<button id="run" class="p">▶ Ejecutar</button>
+<button id="soloLimite">Solo los casos límite</button>
+<div id="estado"></div>
+<div id="resumen"></div>
+<table id="tabla"><thead><tr>
+  <th>Caso</th><th>Motor propio</th><th>RMBG</th><th>Escena</th><th>Propio</th><th>RMBG</th>
+</tr></thead><tbody></tbody></table>
+
+<script>
+const _V="?v="+Date.now();
+const _L=["libs","fonts","db","charset","render","summarize","ai","segment","capture","scan","transcribe","audio","generate","app"];
+document.write(_L.map(n=>'<scr'+'ipt src="../js/'+n+'.js'+_V+'"><\/scr'+'ipt>').join(""));
+</script>
+<script>
+document.write('<scr'+'ipt src="casos.js'+_V+'"><\/scr'+'ipt>');
+document.write('<scr'+'ipt src="puntua.js'+_V+'"><\/scr'+'ipt>');
+</script>
+<script>
+window.APP=window.APP||{}; APP.busy=()=>{}; APP.idle=()=>{}; APP.toast=()=>{};
+function control(id,tipo,valor,marcado){
+  let el=document.getElementById(id); if(el) return el;
+  el=document.createElement('input');
+  if(tipo==='check'){ el.type='checkbox'; el.checked=!!marcado; } else { el.type='range'; el.value=valor; }
+  el.id=id; el.style.display='none'; document.body.appendChild(el); return el;
+}
+['sigThresh:50','sigQuitaNeutro:0','sigTolerancia:45','sigMinAlpha:0'].forEach(s=>{
+  const [id,v]=s.split(':'); control(id,'rango',v); });
+[['sigGrid',true],['sigColorSolo',true],['sigSoloPick',false],['sigAll',false]].forEach(([id,m])=>control(id,'check',0,m));
+
+const T=window.__MT;
+const est=m=>{ document.getElementById('estado').textContent=m; };
+const pct=v=>Math.round(v*100)+'%';
+const clase=v=>v>=0.85?'bien':(v>=0.6?'reg':'mal');
+const mini=(c,alto)=>{ if(!c) return null; const k=alto/c.height;
+  const d=document.createElement('canvas'); d.width=Math.round(c.width*k); d.height=alto;
+  d.getContext('2d').drawImage(c,0,0,d.width,d.height); return d; };
+
+/* ── RMBG ────────────────────────────────────────────────────────────────
+   transformers.js v3 trae la tarea 'background-removal', asi que no hay que
+   montar el pre/post proceso a mano. El modelo se descarga una vez (decenas
+   de MB) y queda en la cache del navegador.                                */
+let _pipe=null;
+async function segmentador(){
+  if(_pipe) return _pipe;
+  est('Descargando el modelo RMBG (solo la primera vez, son decenas de MB)…');
+  const tf=await LIBS.transformers();
+  _pipe=await tf.pipeline('background-removal','briaai/RMBG-1.4',{
+    progress_callback:d=>{ if(d.status==='progress'&&d.file)
+      est('Descargando '+d.file+' — '+Math.round(d.progress||0)+'%'); }
+  });
+  return _pipe;
+}
+async function porRMBG(escena){
+  const pipe=await segmentador();
+  const out=await pipe(escena.toDataURL('image/png'));
+  const img=Array.isArray(out)?out[0]:out;
+  // RawImage -> canvas; el alpha del modelo es la mascara
+  const c=document.createElement('canvas');
+  if(img.toCanvas){ const k=img.toCanvas(); c.width=k.width; c.height=k.height;
+                    c.getContext('2d').drawImage(k,0,0); return c; }
+  c.width=img.width; c.height=img.height;
+  const ctx=c.getContext('2d'), id=ctx.createImageData(img.width,img.height);
+  const ch=img.channels||4, d=img.data;
+  for(let p=0;p<img.width*img.height;p++){
+    if(ch===1){ id.data[p*4]=id.data[p*4+1]=id.data[p*4+2]=0; id.data[p*4+3]=d[p]; }
+    else { id.data[p*4]=d[p*ch]; id.data[p*4+1]=d[p*ch+1]; id.data[p*4+2]=d[p*ch+2];
+           id.data[p*4+3]=ch>3?d[p*ch+3]:255; }
+  }
+  ctx.putImageData(id,0,0); return c;
+}
+
+/* El motor propio, exactamente como lo llama el banco de firmas. */
+async function porMotorPropio(escena,W,H){
+  const img=await new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.src=escena.toDataURL('image/png');});
+  const seg=T.inkClusters(img);
+  const g=(seg&&seg.clusters[0])||{x0:0,y0:0,x1:W,y1:H};
+  const px=Math.max(8,(g.x1-g.x0)*0.10), pa=Math.max(px,(g.y1-g.y0)*0.30);
+  const x0=Math.max(0,g.x0-px), y0=Math.max(0,g.y0-pa);
+  const cc=document.createElement('canvas');
+  cc.width=Math.round(Math.min(W,g.x1+px)-x0); cc.height=Math.round(Math.min(H,g.y1+px)-y0);
+  cc.getContext('2d').drawImage(img,x0,y0,cc.width,cc.height,0,0,cc.width,cc.height);
+  const crop=await new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.src=cc.toDataURL('image/png');});
+  return T.extractTight(crop,50).canvas;
+}
+
+async function ejecuta(soloLimite){
+  const tb=document.querySelector('#tabla tbody'); tb.innerHTML='';
+  document.getElementById('resumen').innerHTML='';
+  const W=520,H=340, filas=[];
+  const defs=CASOS.DEFS.filter(d=>!soloLimite || /IGUAL de tenue/.test(d.nombre));
+  for(const def of defs){
+    est('Probando '+def.nombre+'…');
+    await new Promise(r=>setTimeout(r,0));
+    // condicion nitida: si RMBG no funciona ni aqui, no funciona
+    const {escena,tinta}=await CASOS.construye(def, CASOS.DEGRADACIONES[0].opt, W, H);
+    let pro=null, rmb=null, cPro=null, cRmb=null, err='';
+    try{ cPro=await porMotorPropio(escena,W,H); pro=PUNTUA.puntua(cPro,tinta); }catch(e){ err+='propio: '+e.message+' '; }
+    try{ cRmb=await porRMBG(escena);           rmb=PUNTUA.puntua(cRmb,tinta); }catch(e){ err+='rmbg: '+e.message; }
+
+    const tr=document.createElement('tr');
+    const cel=r=>r? '<td class="n"><span class="'+clase(r.conserva)+'">'+pct(r.conserva)+'</span> / '+
+                    '<span class="'+clase(r.limpieza)+'">'+pct(r.limpieza)+'</span></td>'
+                  : '<td class="mal">—</td>';
+    tr.innerHTML='<td>'+def.nombre+(err?'<br><small class="mal">'+err+'</small>':'')+'</td>'+
+                 cel(pro)+cel(rmb)+'<td class="e"></td><td class="a"></td><td class="b"></td>';
+    tb.appendChild(tr);
+    const m1=mini(escena,50), m2=mini(cPro,50), m3=mini(cRmb,50);
+    if(m1) tr.querySelector('.e').appendChild(m1);
+    if(m2) tr.querySelector('.a').appendChild(m2);
+    if(m3) tr.querySelector('.b').appendChild(m3);
+    if(pro&&rmb) filas.push({caso:def.nombre, pro, rmb});
+  }
+  est('Listo: '+filas.length+' casos.');
+  if(filas.length){
+    const med=(k,q)=>filas.reduce((a,f)=>a+f[k][q],0)/filas.length;
+    const gana=filas.filter(f=>(f.rmb.conserva+f.rmb.limpieza)>(f.pro.conserva+f.pro.limpieza));
+    document.getElementById('resumen').innerHTML='<div class="resumen">'+
+      '<b>Motor propio</b> — '+pct(med('pro','conserva'))+' / '+pct(med('pro','limpieza'))+'<br>'+
+      '<b>RMBG</b> — '+pct(med('rmb','conserva'))+' / '+pct(med('rmb','limpieza'))+'<br>'+
+      '<b>RMBG gana en</b> '+gana.length+' de '+filas.length+' casos'+
+      (gana.length? ': '+gana.map(g=>g.caso).join(' · ') : '')+'</div>';
+  }
+  window.__RMBG=filas;
+}
+document.getElementById('run').onclick=()=>ejecuta(false);
+document.getElementById('soloLimite').onclick=()=>ejecuta(true);
+</script>
+</body></html>
