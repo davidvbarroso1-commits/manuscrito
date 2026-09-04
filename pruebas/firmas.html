@@ -114,11 +114,26 @@ async function ejecuta(soloColor){
   }
   document.getElementById('estado').textContent='Listo: '+filas.length+' pruebas.';
   if(filas.length){
-    const med=k=>filas.reduce((a,f)=>a+f[k],0)/filas.length;
+    const med=(fs,k)=>fs.reduce((a,f)=>a+f[k],0)/fs.length;
     const malos=filas.filter(f=>f.conserva<0.6||f.limpieza<0.6);
+    /* La media de un caso mezcla regimenes de fallo distintos y eso esconde
+       el problema. Medido con la lupa en el caso limite de la cuadricula:
+       con foto NITIDA hay UN componente con la firma y la rejilla fundidas
+       (falla la limpieza, no hay nada que unir); con foto degradada se parte
+       en 24 trozos y se descartan 18 (falla la union). Son dos averias
+       distintas, y una mejora que arregle una puede parecer neutra porque
+       empeora la otra. Por eso la media va tambien POR CONDICION.          */
+    const porCond=CASOS.DEGRADACIONES.map(d=>{
+      const fs=filas.filter(f=>f.cond===d.nombre);
+      return fs.length? {n:d.nombre, c:med(fs,'conserva'), l:med(fs,'limpieza'), k:fs.length} : null;
+    }).filter(Boolean);
     document.getElementById('resumen').innerHTML=
-      '<div class="resumen"><b>Media</b> — conserva '+pct(med('conserva'))+
-      ' · limpieza '+pct(med('limpieza'))+'<br><b>Casos flojos ('+malos.length+')</b>: '+
+      '<div class="resumen"><b>Media</b> — conserva '+pct(med(filas,'conserva'))+
+      ' · limpieza '+pct(med(filas,'limpieza'))+
+      '<table style="margin-top:10px"><tr><th>Condición</th><th>Conserva</th><th>Limpieza</th><th>Pruebas</th></tr>'+
+      porCond.map(r=>'<tr><td>'+r.n+'</td><td class="n '+clase(r.c)+'">'+pct(r.c)+
+        '</td><td class="n '+clase(r.l)+'">'+pct(r.l)+'</td><td class="n">'+r.k+'</td></tr>').join('')+
+      '</table><b>Casos flojos ('+malos.length+')</b>: '+
       (malos.length? malos.map(m=>m.caso+' ['+m.cond+']').join(' · ') : 'ninguno')+'</div>';
   }
   window.__BANCO=filas;
