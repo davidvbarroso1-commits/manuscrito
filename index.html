@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Manuscrito — Tu letra, tus apuntes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Caveat:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css?v=83">
+</head>
+<body>
+
+<!-- ====================== TOP BAR ====================== -->
+<header class="topbar">
+  <div class="brand">
+    <svg class="brand-mark" viewBox="0 0 40 40" aria-hidden="true">
+      <path d="M7 31c4-14 7-21 9-21 1.6 0 1.4 3 1 7-.6 6-1 9 .8 9 2.4 0 4.4-5 6-11 .5-1.8 1.2-2.6 2-2.6 1.4 0 1.2 2.4 1 5.2-.2 2.6-.1 4.4 1.2 4.4 1.4 0 2.6-1.4 3.8-3.6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <div class="brand-text">
+      <strong>Manuscrito</strong>
+      <span>tu letra, tus apuntes</span>
+    </div>
+  </div>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab active" data-view="home">Inicio</button>
+    <button class="tab" data-view="capture">Estudio de letra</button>
+    <button class="tab" data-view="audio">Audio → texto</button>
+    <button class="tab" data-view="generate">Generar apuntes</button>
+  </nav>
+
+  <div class="profile">
+    <label class="muted sm" for="profileSel">Perfil</label>
+    <select id="profileSel" class="select-sm"></select>
+    <button id="newProfileBtn" class="btn-ghost sm" title="Nuevo perfil de caligrafía">+</button>
+  </div>
+</header>
+
+<main class="stage">
+
+  <!-- ====================== HOME ====================== -->
+  <section class="view active" id="view-home">
+    <div class="hero">
+      <h1>Convierte cualquier documento en apuntes <em>escritos a mano</em>.</h1>
+      <p class="lead">Primero captura tu caligrafía una vez. Después sube un texto, PDF, Word o foto y Manuscrito lo reescribe con <strong>tu</strong> letra, con variación de presión, tono y pequeñas imperfecciones — listo para imprimir.</p>
+      <div class="hero-actions">
+        <button class="btn-primary" data-goto="capture">① Capturar mi letra</button>
+        <button class="btn-secondary" data-goto="generate">② Generar apuntes</button>
+      </div>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <div class="card-ic">✍️</div>
+        <h3>Captura tu letra</h3>
+        <p>Dibuja en pantalla (con presión real si usas lápiz óptico) <em>o</em> imprime una plantilla, escríbela y súbela como foto.</p>
+        <div class="progress-wrap">
+          <div class="progress"><div class="progress-bar" id="homeProgBar"></div></div>
+          <span class="muted sm" id="homeProgTxt">0 / 0 glifos</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-ic">📄</div>
+        <h3>Sube documentos</h3>
+        <p>Texto, PDF, Word (.docx) o imágenes con OCR. Manuscrito extrae el texto y lo prepara para escribirlo a mano.</p>
+      </div>
+      <div class="card">
+        <div class="card-ic">🖨️</div>
+        <h3>Imprime el cuadernillo</h3>
+        <p>Hojas tamaño A4 o Carta, con renglones o cuadrícula, márgenes y agujeros simulados. Exporta a PDF o imprime directo.</p>
+      </div>
+    </div>
+
+    <div class="tip">
+      <strong>Consejo:</strong> mientras más variantes captures de cada letra (2–3 por carácter), más natural se verá el resultado. Manuscrito alterna entre ellas al escribir.
+    </div>
+  </section>
+
+  <!-- ====================== CAPTURE ====================== -->
+  <section class="view" id="view-capture">
+    <div class="subtabs">
+      <button class="subtab active" data-mode="draw">Dibujar en pantalla</button>
+      <button class="subtab" data-mode="scan">Escanear plantilla</button>
+      <button class="subtab" data-mode="notes">Apuntes → nuevo estilo</button>
+      <div class="subtabs-spacer"></div>
+      <div class="charfilter">
+        <label class="muted sm">Mostrar</label>
+        <select id="charFilter" class="select-sm">
+          <option value="all">Todo</option>
+          <option value="lower">Minúsculas</option>
+          <option value="upper">Mayúsculas</option>
+          <option value="digit">Números</option>
+          <option value="punct">Signos</option>
+          <option value="pending">Faltantes</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="capture-layout">
+      <!-- charset grid -->
+      <aside class="charset-panel">
+        <div class="charset-head">
+          <span id="charsetCount" class="muted sm">—</span>
+          <button id="exportProfileBtn" class="btn-ghost sm" title="Descargar perfil (.json)">⬇ Respaldo</button>
+          <button id="importProfileBtn" class="btn-ghost sm" title="Cargar perfil (.json)">⬆</button>
+          <input type="file" id="importProfileInput" accept="application/json" hidden>
+        </div>
+        <div class="charset-grid" id="charsetGrid"></div>
+      </aside>
+
+      <!-- DRAW mode -->
+      <div class="capture-main" id="capture-draw">
+        <div class="capture-toolbar">
+          <div class="cur-glyph">
+            Escribiendo: <b id="curGlyph">a</b>
+            <span class="muted sm" id="curGlyphHint"></span>
+          </div>
+          <div class="spacer"></div>
+          <label class="muted sm">Grosor</label>
+          <input type="range" id="brushSize" min="1.5" max="9" step="0.5" value="3.5">
+          <button id="undoBtn" class="btn-ghost sm">↶ Deshacer</button>
+          <button id="clearBtn" class="btn-ghost sm">Limpiar</button>
+        </div>
+        <div class="pad-wrap">
+          <canvas id="padGuides" class="pad-layer"></canvas>
+          <canvas id="padInk" class="pad-layer"></canvas>
+        </div>
+        <div class="capture-actions">
+          <button id="prevCharBtn" class="btn-ghost">‹ Anterior</button>
+          <button id="saveVariantBtn" class="btn-primary">Guardar variante ✓</button>
+          <button id="nextCharBtn" class="btn-ghost">Siguiente ›</button>
+        </div>
+
+        <div class="letter-scan">
+          <div class="ls-head">
+            <h4>📷 Escanear esta letra <span class="muted sm">(junta muchas de una sola foto)</span></h4>
+            <p class="muted sm">Escribe "<b id="lsChar">a</b>" muchas veces en papel (una fila o cuadrícula), toma la foto y la app separa <b>cada repetición</b> en una variante distinta.</p>
+          </div>
+          <div class="row">
+            <label class="ls-file btn-secondary" for="lsInput">📷 Subir / tomar foto</label>
+            <input type="file" id="lsInput" accept="image/*" capture="environment" hidden>
+            <label class="muted sm">Umbral</label>
+            <input type="range" id="lsThresh" min="40" max="220" value="120">
+            <label class="muted sm">Meta</label>
+            <input type="number" id="lsMeta" class="num" value="100" min="1" max="500">
+          </div>
+          <div class="ls-progress">
+            <div class="progress"><div class="progress-bar" id="lsBar"></div></div>
+            <span class="muted sm" id="lsCount">0 / 100</span>
+          </div>
+        </div>
+
+        <div class="variants">
+          <span class="muted sm">Variantes de "<b id="varChar">a</b>" <span id="varCount" class="muted sm"></span>:</span>
+          <div class="variant-strip" id="variantStrip"></div>
+        </div>
+      </div>
+
+      <!-- SCAN mode -->
+      <div class="capture-main" id="capture-scan" hidden>
+        <div class="scan-steps">
+          <div class="scan-step">
+            <h4>1. Imprime la plantilla</h4>
+            <p class="muted sm">Genera una hoja con casillas y guías. Imprímela, escribe cada letra sobre su renglón y vuelve aquí.</p>
+            <div class="row">
+              <label class="muted sm">Columnas</label>
+              <input type="number" id="tplCols" class="num" value="7" min="3" max="12">
+              <button id="genTemplateBtn" class="btn-secondary">Generar plantilla para imprimir</button>
+            </div>
+          </div>
+          <div class="scan-step">
+            <h4>2. Sube la foto</h4>
+            <p class="muted sm">Foto o escaneo de la plantilla ya escrita, con buena luz y sin sombras.</p>
+            <input type="file" id="scanInput" accept="image/*">
+          </div>
+        </div>
+
+        <div id="scanWork" hidden>
+          <h4>3. Alinea la cuadrícula</h4>
+          <p class="muted sm">Arrastra las 4 esquinas para que el marco cubra exactamente las casillas escritas.</p>
+          <div class="row">
+            <label class="muted sm">Filas</label>
+            <input type="number" id="scanRows" class="num" value="0" min="1" max="20">
+            <label class="muted sm">Columnas</label>
+            <input type="number" id="scanCols" class="num" value="7" min="3" max="12">
+            <label class="muted sm">Umbral tinta</label>
+            <input type="range" id="scanThresh" min="20" max="220" value="120">
+            <button id="scanProcessBtn" class="btn-primary">Extraer letras ›</button>
+          </div>
+          <div class="scan-canvas-wrap">
+            <canvas id="scanCanvas"></canvas>
+          </div>
+        </div>
+
+        <div id="scanAssign" hidden>
+          <h4>4. Revisa y asigna</h4>
+          <p class="muted sm">Cada casilla extraída se asigna a una letra en orden. Corrige las que hagan falta y guarda.</p>
+          <div class="assign-grid" id="assignGrid"></div>
+          <button id="scanSaveBtn" class="btn-primary">Guardar todas las letras ✓</button>
+        </div>
+      </div>
+
+      <!-- NOTES mode: foto de apuntes largos + transcripción -> nuevo tipo de letra -->
+      <div class="capture-main" id="capture-notes" hidden>
+        <div class="notes-grid">
+          <div class="scan-step">
+            <h4>1. Sube la foto de tus apuntes</h4>
+            <p class="muted sm">Una página tuya escrita a mano, lo más recta y nítida posible.</p>
+            <input type="file" id="ntInput" accept="image/*" capture="environment">
+          </div>
+          <div class="scan-step">
+            <h4>2. ¿Qué dice? — transcripción</h4>
+            <p class="muted sm">Escribe (o dicta) el mismo texto de la foto. Sirve para etiquetar cada letra detectada.</p>
+            <textarea id="ntText" rows="4" placeholder="El mismo texto que aparece en la foto…"></textarea>
+            <div class="row">
+              <button id="ntMicBtn" class="btn-secondary">🎤 Dictar por voz</button>
+              <span class="muted sm" id="ntMicStatus"></span>
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <label class="muted sm">Umbral de tinta</label>
+          <input type="range" id="ntThresh" min="40" max="220" value="120">
+          <button id="ntAnalyzeBtn" class="btn-primary">Analizar y emparejar ›</button>
+          <span class="muted sm" id="ntStatus"></span>
+        </div>
+
+        <div id="ntReview" hidden>
+          <h4>3. Revisa las letras detectadas</h4>
+          <p class="muted sm">Cada recorte se empareja en orden con tu transcripción. Corrige las que estén mal y <b>deja en blanco</b> las que sean ruido o estén partidas.</p>
+          <div class="row">
+            <label class="muted sm">Nombre del nuevo tipo de letra</label>
+            <input type="text" id="ntProfileName" placeholder="Ej. Mi letra rápida">
+            <button id="ntSaveBtn" class="btn-primary">Crear tipo de letra ✓</button>
+            <span class="muted sm" id="ntSaveInfo"></span>
+          </div>
+          <div id="ntLines"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================== AUDIO → TEXTO ====================== -->
+  <section class="view" id="view-audio">
+    <div class="audio-layout">
+      <div class="audio-panel">
+        <h3>1 · Audio</h3>
+        <p class="muted sm">Sube un archivo o graba con el micrófono. Todo se transcribe <b>en tu dispositivo</b> con IA (Whisper) — privado, sin subir nada a internet.</p>
+        <div class="row">
+          <label class="btn-secondary" for="audInput">📁 Subir audio</label>
+          <input type="file" id="audInput" accept="audio/*" hidden>
+          <button id="audRecBtn" class="btn-secondary">🎤 Grabar</button>
+          <span class="muted sm" id="audSrc"></span>
+        </div>
+        <audio id="audPlayer" controls hidden></audio>
+
+        <h3 style="margin-top:18px">2 · Transcribir</h3>
+        <div class="row">
+          <label class="muted sm">Calidad</label>
+          <select id="audModel" class="select-sm">
+            <option value="Xenova/whisper-tiny">Rápida (tiny)</option>
+            <option value="Xenova/whisper-base" selected>Equilibrada (base)</option>
+            <option value="Xenova/whisper-small">Precisa (small · lenta)</option>
+          </select>
+          <label class="muted sm">Idioma</label>
+          <select id="audLang" class="select-sm">
+            <option value="spanish" selected>Español</option>
+            <option value="english">Inglés</option>
+            <option value="auto">Detectar</option>
+          </select>
+          <button id="audRunBtn" class="btn-primary">Transcribir ▶</button>
+        </div>
+        <p class="muted sm" id="audNote">La 1ª vez descarga el modelo (~40–200 MB según calidad) y queda en caché para la próxima. Reconoce palabras confusas por contexto.</p>
+      </div>
+
+      <div class="audio-panel">
+        <h3>3 · Resultado</h3>
+        <textarea id="audText" rows="12" placeholder="Aquí aparece la transcripción… (editable)"></textarea>
+        <div class="row">
+          <button id="audFmtResumen" class="btn-ghost sm">Resumir</button>
+          <button id="audFmtEsquema" class="btn-ghost sm">A esquema</button>
+          <button id="audFmtIdeas" class="btn-ghost sm">Ideas clave</button>
+          <button id="audFmtOrig" class="btn-ghost sm">↺ Original</button>
+        </div>
+        <button id="audToGen" class="btn-primary block" style="margin-top:10px">✍️ Enviar a Generar apuntes (escribir a mano)</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================== GENERATE (interfaz tipo Word) ====================== -->
+  <section class="view" id="view-generate">
+    <div class="ribbon">
+      <div class="ribbon-top">
+        <div class="ribbon-tabs">
+          <button class="rtab active" data-rt="inicio">Inicio</button>
+          <button class="rtab" data-rt="insertar">Insertar</button>
+          <button class="rtab" data-rt="disposicion">Disposición</button>
+          <button class="rtab" data-rt="ia">IA ✦</button>
+        </div>
+        <div class="ribbon-actions">
+          <label class="live-toggle"><input type="checkbox" id="optLive" checked> ⚡ En vivo</label>
+          <button id="rerollBtn" class="btn-ghost sm" title="Otra variación de letra">🎲</button>
+          <button id="genBtn" class="btn-primary sm">Generar ✦</button>
+          <button id="printBtn" class="btn-secondary sm">🖨️</button>
+          <button id="pdfBtn" class="btn-secondary sm">⬇ PDF</button>
+          <button id="sideBtn" class="btn-ghost sm side-toggle" title="Ver menús y hoja lado a lado">⇹ Lado a lado</button>
+          <button id="saveSetBtn" class="btn-ghost sm" title="Guardar todos los ajustes">💾</button>
+        </div>
+      </div>
+
+      <!-- ===== PESTAÑA INICIO ===== -->
+      <div class="rpanel active" data-rp="inicio">
+        <div class="rgroup">
+          <div class="rg-body">
+            <select id="optFontKind" class="select-sm">
+              <option value="similar" selected>⭐ Parecidas a mi letra</option>
+              <option value="g:cuaderno">✍ Cursiva de cuaderno</option>
+              <option value="g:imprenta">✍ Letra de imprenta a mano</option>
+              <option value="g:formal">✍ Caligrafía formal</option>
+              <option value="g:rotulador">✍ Rotulador y pincel</option>
+              <option value="hand">Manuscritas (todas)</option>
+              <option value="print">Imprenta (serif y palo seco)</option>
+              <option value="display">Decorativas</option>
+              <option value="mia">Mi caligrafía</option>
+            </select>
+            <span id="fontSearchRow"><input type="text" id="optFontSearch" class="select-sm" placeholder="Buscar…" style="width:90px"></span>
+            <select id="optFont" class="select-sm" style="max-width:170px"></select>
+            <div id="fontPreview" class="font-preview rb">Aa Bb Cc</div>
+            <div class="rrow"><button id="mixAddBtn" class="btn-ghost sm">➕ a mezcla</button>
+              <label class="muted sm chk"><input type="checkbox" id="mixUse"> mezclar</label>
+              <span class="muted sm" id="fontNote"></span></div>
+            <div id="mixChips" class="mix-chips"></div>
+          </div>
+          <div class="rg-title">Fuente</div>
+        </div>
+        <div class="rgroup">
+          <div class="rg-body">
+            <div class="rctl"><label>Tamaño</label><input type="range" id="optSize" min="14" max="40" value="24"><span class="val" id="valSize">24</span></div>
+            <div class="rctl"><label>Interlínea</label><input type="range" id="optLine" min="1.3" max="3" step="0.1" value="2"><span class="val" id="valLine">2.0</span></div>
+            <div class="rctl"><label>Instrum.</label>
+              <select id="optInstrument" class="select-sm">
+                <option value="boli-azul">Bolígrafo azul</option>
+                <option value="boli-negro">Bolígrafo negro</option>
+                <option value="lapiz">Lápiz (grafito)</option>
+                <option value="pluma">Pluma / tinta</option>
+                <option value="marcador">Marcador</option>
+                <option value="color">Lápiz de color</option>
+              </select>
+              <input type="color" id="optColor" value="#1f3ac4"></div>
+          </div>
+          <div class="rg-title">Letra</div>
+        </div>
+        <div class="rgroup">
+          <div class="rg-body">
+            <div class="rrow">
+              <input type="color" id="rtColor" value="#e63946" title="Color de selección">
+              <button id="rtColorBtn" class="btn-ghost sm">🖍 Color</button>
+              <button id="rtUnderBtn" class="btn-ghost sm">▁ Subrayar</button>
+            </div>
+            <div class="rrow">
+              <select id="rtInstr" class="select-sm">
+                <option value="boli-azul">Bolíg. azul</option><option value="boli-negro">Bolíg. negro</option>
+                <option value="lapiz">Lápiz</option><option value="pluma">Pluma</option>
+                <option value="marcador">Marcador</option><option value="color">Lápiz color</option>
+              </select>
+              <button id="rtInstrBtn" class="btn-ghost sm">✒</button>
+              <select id="rtSize" class="select-sm">
+                <option value="0.7">70%</option><option value="0.85">85%</option>
+                <option value="1.25">125%</option><option value="1.5">150%</option><option value="1.8">180%</option>
+              </select>
+              <button id="rtSizeBtn" class="btn-ghost sm">↕</button>
+              <button id="rtClearBtn" class="btn-ghost sm">✕</button>
+            </div>
+            <span class="muted sm">clic en una palabra del papel la selecciona</span>
+          </div>
+          <div class="rg-title">Selección</div>
+        </div>
+        <div class="rgroup">
+          <div class="rg-body">
+            <div class="para-btns">
+              <button data-al="left" class="btn-ghost sm on" title="Alinear a la izquierda">⯇</button>
+              <button data-al="center" class="btn-ghost sm" title="Centrar">≡</button>
+              <button data-al="right" class="btn-ghost sm" title="Alinear a la derecha">⯈</button>
+              <button data-al="justify" class="btn-ghost sm" title="Justificar">▤</button>
+            </div>
+            <div class="rctl"><label>Sangría 1ª</label>
+              <input type="range" id="optIndent" min="0" max="60" value="0"><span class="val" id="valIndent">0</span></div>
+            <div class="rctl"><label>Espacio ¶</label>
+              <input type="range" id="optParaGap" min="0" max="100" value="0"><span class="val" id="valParaGap">0</span></div>
+            <input type="hidden" id="optAlign" value="left">
+          </div>
+          <div class="rg-title">Párrafo</div>
+        </div>
+        <div class="rgroup">
+          <div class="rg-body">
+            <div class="rrow">
+              <select id="optFormat" class="select-sm">
+                <option value="resumen">Resumen (viñetas)</option>
+                <option value="ideas">Ideas clave</option>
+                <option value="esquema">Esquema</option>
+                <option value="outline">Esquema numerado</option>
+                <option value="cornell">Método Cornell</option>
+                <option value="feynman">Método Feynman</option>
+                <option value="glosario">Glosario</option>
+                <option value="preguntas">Preguntas</option>
+                <option value="flashcards">Flashcards</option>
+                <option value="boxing">Cajas</option>
+                <option value="mapa">Mapa mental</option>
+                <option value="completo">Texto completo</option>
+              </select>
+              <button id="fmtSelBtn" class="btn-ghost sm" title="Solo a la selección">✂</button>
+            </div>
+            <div class="rrow">
+              <select id="optMapStyle" class="select-sm" title="Estilo del mapa mental">
+                <option value="auto" selected>Mapa: variado (elige solo)</option>
+                <option value="radial">Mapa: radial</option>
+                <option value="arbol">Mapa: árbol</option>
+                <option value="columnas">Mapa: columnas</option>
+                <option value="espina">Mapa: espina</option>
+                <option value="burbujas">Mapa: burbujas</option>
+                <option value="escalera">Mapa: escalera</option>
+              </select>
+            </div>
+            <div class="rrow">
+              <select id="optTablaAlin" class="select-sm" title="Cómo se coloca el texto dentro de cada celda">
+                <option value="izq" selected>Tabla: texto a la izquierda</option>
+                <option value="centro">Tabla: texto centrado</option>
+                <option value="der">Tabla: texto a la derecha</option>
+                <option value="just">Tabla: texto justificado</option>
+              </select>
+            </div>
+            <div class="rctl" title="Ancho de la tabla respecto a la hoja. El texto se reajusta solo"><label>Ancho tabla</label>
+              <input type="range" id="optTablaAncho" min="40" max="100" value="100"><span class="val" id="valTablaAncho">100</span></div>
+            <div class="rctl" title="Tamaño de la letra dentro de la tabla. Más pequeña = cabe más y la tabla encoge"><label>Letra tabla</label>
+              <input type="range" id="optTablaTam" min="60" max="140" value="100"><span class="val" id="valTablaTam">100</span></div>
+            <div class="rctl" title="Separación entre líneas dentro de las celdas"><label>Interlineado tabla</label>
+              <input type="range" id="optTablaInter" min="70" max="180" value="100"><span class="val" id="valTablaInter">100</span>
+            </div>
+          </div>
+          <div class="rg-title">Estilos de apunte</div>
+        </div>
+        <div class="rgroup rg-realismo">
+          <div class="rg-body">
+            <div class="rsliders">
+              <div class="rctl"><label>Presión</label><input type="range" id="optPressure" min="0" max="100" value="55"><span class="val" id="valPressure">55</span></div>
+              <div class="rctl"><label>Tono</label><input type="range" id="optTone" min="0" max="100" value="45"><span class="val" id="valTone">45</span></div>
+              <div class="rctl"><label>Transpar.</label><input type="range" id="optTransp" min="0" max="60" value="0"><span class="val" id="valTransp">0</span></div>
+              <div class="rctl"><label>Disimulo</label><input type="range" id="optSmooth" min="0" max="100" value="45"><span class="val" id="valSmooth">45</span></div>
+              <div class="rctl"><label>Caída</label><input type="range" id="optFall" min="0" max="100" value="15"><span class="val" id="valFall">15</span></div>
+              <div class="rctl"><label>Imperfec.</label><input type="range" id="optJitter" min="0" max="100" value="38"><span class="val" id="valJitter">38</span></div>
+              <div class="rctl"><label>Temblor</label><input type="range" id="optDrift" min="0" max="100" value="22"><span class="val" id="valDrift">22</span></div>
+              <div class="rctl"><label>Manchas</label><input type="range" id="optBlots" min="0" max="100" value="10"><span class="val" id="valBlots">10</span></div>
+              <div class="rctl"><label>Desgaste</label><input type="range" id="optWear" min="0" max="100" value="45"><span class="val" id="valWear">45</span></div>
+              <div class="rctl"><label>Repintado</label><input type="range" id="optRetrace" min="0" max="100" value="12"><span class="val" id="valRetrace">12</span></div>
+              <div class="rctl"><label>Tachones</label><input type="range" id="optStrikes" min="0" max="100" value="8"><span class="val" id="valStrikes">8</span></div>
+              <div class="rctl"><label>Inclinac.</label><input type="range" id="optSlant" min="-12" max="12" value="-3"><span class="val" id="valSlant">-3°</span></div>
+              <div class="rctl"><label>Fallo tinta</label><input type="range" id="optInk" min="0" max="100" value="10"><span class="val" id="valInk">10</span></div>
+            </div>
+            <div class="realism-pv-wrap"><canvas id="realismPreview"></canvas></div>
+          </div>
+          <div class="rg-title">Realismo</div>
+        </div>
+      </div>
+
+      <!-- ===== PESTAÑA INSERTAR ===== -->
+      <div class="rpanel" data-rp="insertar">
+        <div class="rgroup">
+          <div class="rg-body">
+            <div class="ins-btns">
+              <button class="btn-ghost sm" data-ins="table">▦ Tabla</button>
+              <button class="btn-ghost sm" data-ins="box">▭ Cuadro</button>
+              <button class="btn-ghost sm" data-ins="rect">□ Rect.</button>
+              <button class="btn-ghost sm" data-ins="ellipse">◯ Elipse</button>
+              <button class="btn-ghost sm" data-ins="line">／ Línea</button>
+              <button class="btn-ghost sm" data-ins="arrow">→ Flecha</button>
+            </div>
+            <div class="rctl"><label>Imperfección</label>
+              <input type="range" id="optObjRough" min="0" max="100" value="55"><span class="val" id="valObjRough">55</span></div>
+            <span class="muted sm">0 = líneas perfectas · 100 = muy a mano. Arrastra por ⠿, escribe dentro.</span>
+          </div>
+          <div class="rg-body"><div class="rrow">
+              <button id="croquisBtn" class="btn-secondary sm" title="Inserta una imagen redibujada como si fuera a lápiz">✏️ Imagen a mano</button>
+              <input type="file" id="croquisInput" accept="image/*" hidden>
+            </div>
+          </div>
+          <div class="rg-title">Objetos</div>
+        </div>
+        <div class="rgroup">
+          <div class="rg-body">
+            <div class="rrow">
+              <label class="btn-secondary sm" for="sigInput">📷 Subir</label>
+              <input type="file" id="sigInput" accept="image/*" hidden>
+              <button id="sigPaste" class="btn-secondary sm">📋 Pegar</button>
+              <button id="sigClear" class="btn-ghost sm" hidden>Quitar</button>
+            </div>
+            <div id="sigThumb" class="sig-thumb" hidden></div>
+            <div class="muted sm" id="sigVieja" hidden></div>
+            <div class="rctl" id="sigThreshRow" hidden><label>Recorte</label>
+              <input type="range" id="sigThresh" min="20" max="90" value="50"><span class="val" id="valSigThresh">50</span></div>
+            <label class="muted sm chk" id="sigAllRow" hidden><input type="checkbox" id="sigAll"> Conservar todo lo oscuro (si tu firma quedó incompleta)</label>
+            <label class="muted sm chk" id="sigGridRow" hidden><input type="checkbox" id="sigGrid" checked> Quitar la cuadrícula del cuaderno</label>
+            <label class="muted sm chk" id="sigColorSoloRow" hidden title="Si tu firma es de color y el documento tiene texto impreso negro, se queda solo con la firma"><input type="checkbox" id="sigColorSolo" checked> Solo la tinta de color (descarta lo impreso)</label>
+            <div class="rrow" id="sigAvanzRow" hidden>
+              <button id="sigCuentagotas" class="btn-secondary sm" title="Pincha aquí y luego sobre el trazo de tu firma para quedarte solo con ese color">💧 Elegir la tinta</button>
+              <span id="sigPickSw" class="sig-sw" hidden title="Color elegido"></span>
+              <label class="muted sm chk"><input type="checkbox" id="sigSoloPick"> solo ese color</label>
+            </div>
+            <div class="rctl" id="sigQuitaNeutroRow" hidden title="Sube esto si se ve el texto impreso negro del papel. Solo sirve si tu firma es de color"><label>Quitar negros</label>
+              <input type="range" id="sigQuitaNeutro" min="0" max="100" value="0"><span class="val" id="valSigQuitaNeutro">0</span></div>
+            <div class="rctl" id="sigToleranciaRow" hidden title="Cuánto se parece a la tinta elegida para conservarlo"><label>Tolerancia</label>
+              <input type="range" id="sigTolerancia" min="10" max="120" value="45"><span class="val" id="valSigTolerancia">45</span></div>
+            <div class="rctl" id="sigMinAlphaRow" hidden title="Elimina los restos medio transparentes: halos y sombras del papel"><label>Quitar halos</label>
+              <input type="range" id="sigMinAlpha" min="0" max="90" value="0"><span class="val" id="valSigMinAlpha">0</span></div>
+            <div class="rrow">
+              <select id="sigWhat" class="select-sm">
+                <option value="sig">Solo la firma</option>
+                <option value="both">Firma + sello</option>
+                <option value="stamp">Solo el sello</option>
+              </select>
+              <label class="muted sm chk" title="Usa Gemini para encontrar la firma en la foto"><input type="checkbox" id="sigAI" checked> 🤖 detectar con IA</label>
+            </div>
+            <div class="rctl"><label>Tamaño</label>
+              <input type="range" id="sigSize" min="18" max="120" value="55"><span class="val" id="valSigSize">55</span></div>
+            <div class="rctl" title="Más oscura y marcada, o más suave y clara"><label>Intensidad</label>
+              <input type="range" id="sigInk" min="0" max="100" value="50"><span class="val" id="valSigInk">50</span></div>
+            <div class="rctl" title="Trazo más grueso (bolígrafo gordo) o más fino"><label>Grosor</label>
+              <input type="range" id="sigThick" min="0" max="100" value="50"><span class="val" id="valSigThick">50</span></div>
+            <div class="rctl" title="Huecos y bordes gastados, como bolígrafo que se está quedando sin tinta"><label>Desgaste</label>
+              <input type="range" id="sigWear" min="0" max="100" value="0"><span class="val" id="valSigWear">0</span></div>
+            <div class="rctl" title="Zonas más marcadas y más flojas, como la presión real de la mano"><label>Presión</label>
+              <input type="range" id="sigPress" min="0" max="100" value="0"><span class="val" id="valSigPress">0</span></div>
+            <div class="rrow"><button id="sigVary" class="btn-ghost sm" title="Otra variación al azar del desgaste">🎲 Variar</button>
+              <button id="sigRedo" class="btn-ghost sm" title="Vuelve a recortar la foto original con el método más reciente">🔄 Rehacer recorte</button>
+              <button id="sigDiagBtn" class="btn-ghost sm" title="Copia las cifras de lo que hizo el recorte, para poder consultarlo sin mandar la foto">📋 Copiar diagnóstico</button></div>
+            <div class="rrow sig-pal">
+              <button class="sig-sw sw-orig" id="sigOrig" title="Colores reales de la foto">🌈</button>
+              <button class="sig-sw" data-c="#1a2a6c" style="background:#1a2a6c"></button>
+              <button class="sig-sw" data-c="#17181d" style="background:#17181d"></button>
+              <button class="sig-sw" data-c="#c0392b" style="background:#c0392b"></button>
+              <button class="sig-sw" data-c="#2e7d32" style="background:#2e7d32"></button>
+              <button class="sig-sw" data-c="#6a1b9a" style="background:#6a1b9a"></button>
+              <input type="color" id="sigColor" value="#1a2a6c" title="Otro color">
+              <select id="sigTint" hidden><option value="orig" selected>orig</option><option value="one">one</option></select>
+            </div>
+            <div class="rctl"><label>En hoja</label>
+              <select id="sigWhere" class="select-sm"><option value="last">Solo la última</option><option value="all">Todas</option></select></div>
+            <div class="rrow"><button id="sigSaveLib" class="btn-ghost sm">💾 Guardar en biblioteca</button></div>
+            <div id="sigLib" class="sig-lib"></div>
+            <span class="muted sm">Arrástrala sobre la hoja; esquina = tamaño, arriba = rotar</span>
+          </div>
+          <div class="rg-title">Firma</div>
+        </div>
+      </div>
+
+      <!-- ===== PESTAÑA DISPOSICIÓN ===== -->
+      <div class="rpanel" data-rp="disposicion">
+        <div class="rgroup">
+          <div class="rg-body">
+            <div class="rctl"><label>Tamaño</label>
+              <select id="optPaper" class="select-sm">
+                <option value="a4">A4</option>
+                <option value="letter">Carta</option>
+                <option value="custom">Personalizado (mm)</option>
+              </select></div>
+            <div class="rctl"><label>Estilo</label>
+              <select id="optRuling" class="select-sm">
+                <option value="lined">Rayado</option>
+                <option value="college">Universitario</option>
+                <option value="grid4">Cuadriculado 4 mm</option>
+                <option value="grid5">Cuadriculado 5 mm</option>
+                <option value="grid6">Cuadriculado 6 mm</option>
+                <option value="grid8">Cuadriculado 8 mm</option>
+                <option value="blank">Blanco</option>
+                <option value="custom">Personalizado (mi traper)</option>
+              </select></div>
+            <div class="rctl"><label>Agujeros</label>
+              <select id="optHoles" class="select-sm">
+                <option value="none">Ninguno</option>
+                <option value="3">3 anillos</option>
+                <option value="spiral">Espiral</option>
+              </select></div>
+            <div class="rctl"><label>Alternar hoja</label>
+              <select id="optFlip" class="select-sm"><option value="0">No</option><option value="1">Sí (como cuaderno)</option></select></div>
+          </div>
+          <div class="rg-title">Página</div>
+        </div>
+        <div class="rgroup">
+          <div class="rg-body" id="customPaper">
+            <button id="cpPreset" class="btn-secondary sm" style="margin-bottom:6px">📐 Mi traper (214×278)</button>
+            <div class="rctl"><label>Ancho/alto</label>
+              <input type="number" id="cpW" class="num" value="214" min="80" max="400">
+              <input type="number" id="cpH" class="num" value="278" min="80" max="500"><span class="muted sm">mm</span></div>
+            <div class="rctl"><label>Márg. ↑/↓</label>
+              <input type="number" id="cpTop" class="num" value="16" min="0" max="90">
+              <input type="number" id="cpBottom" class="num" value="16" min="0" max="90"><span class="muted sm">mm</span></div>
+            <div class="rctl"><label>Márg. ←/→</label>
+              <input type="number" id="cpLeft" class="num" value="20" min="0" max="90">
+              <input type="number" id="cpRight" class="num" value="12" min="0" max="90"><span class="muted sm">mm</span></div>
+            <div class="rctl"><label>Cuadrícula</label>
+              <input type="number" id="cpGrid" class="num" value="5" min="0" max="15" step="0.5"><span class="muted sm">mm (0=renglón)</span></div>
+            <div class="rctl"><label>Recuadro</label>
+              <select id="cpBox" class="select-sm"><option value="box" selected>Con borde</option><option value="none">Sin borde</option></select>
+              <select id="cpStyle" class="select-sm"><option value="traper">Traper (materia/fecha)</option><option value="simple">Simple</option></select></div>
+          </div>
+          <div class="rg-title">Márgenes y área de escritura</div>
+        </div>
+      </div>
+
+      <!-- ===== PESTAÑA IA ===== -->
+      <div class="rpanel" data-rp="ia">
+        <div class="rgroup">
+          <div class="rg-body">
+            <div class="rrow">
+              <select id="aiProvider" class="select-sm">
+                <option value="gemini" selected>Gemini (gratis)</option>
+                <option value="groq">Groq (gratis, rápido)</option>
+                <option value="cerebras">Cerebras (gratis)</option>
+                <option value="openrouter">OpenRouter (modelos free)</option>
+                <option value="mistral">Mistral (gratis)</option>
+                <option value="xai">Grok · xAI (de pago)</option>
+                <option value="anthropic">Claude (de pago)</option>
+              </select>
+              <input type="password" id="aiKey" class="select-sm" placeholder="Pega tu API key aquí" style="width:200px">
+              <button id="aiSaveKey" class="btn-secondary sm">Guardar</button>
+              <button id="aiDelKey" class="btn-ghost sm" title="Borrar la clave de este proveedor">🗑</button>
+              <span class="muted sm" id="aiKeyState"></span>
+            </div>
+            <div class="muted sm" id="aiCadena"></div>
+            <label class="muted sm chk"><input type="checkbox" id="aiUse"> Usar IA para los formatos de apunte (Cornell, resumen…)</label>
+            <span class="muted sm">Gemini es gratis: saca tu clave en <b>aistudio.google.com</b> → "Get API key". La clave queda solo en tu navegador.</span>
+            <button id="aiTest" class="btn-ghost sm">Probar conexión</button>
+          </div>
+          <div class="rg-title">Inteligencia artificial</div>
+        </div>
+        <div class="rgroup">
+          <div class="rg-body">
+            <div class="rctl"><label>Detalle</label>
+              <select id="aiDepth" class="select-sm">
+                <option value="corto">Corto</option>
+                <option value="medio" selected>Medio</option>
+                <option value="completo">Completo (todo el doc)</option>
+              </select></div>
+            <textarea id="aiNotes" class="ai-notes" placeholder="Instrucciones para la IA. Ej: 'no incluyas ejemplos', 'usa tablas para las comparaciones', 'enfócate en el capítulo 2', 'en viñetas cortas'"></textarea>
+            <button id="aiAnalyze" class="btn-secondary sm">🔍 Analizar documento y sugerir</button>
+            <div class="muted sm" id="aiAnalysis"></div>
+          </div>
+          <div class="rg-title">Análisis</div>
+        </div>
+        <div class="rgroup">
+          <div class="rg-body">
+            <div class="muted sm" id="selEstado">Selecciona texto en el cuadro de la izquierda</div>
+            <div class="rrow">
+              <select id="selAccion" class="select-sm">
+                <option value="resumen">Resumir</option>
+                <option value="ideas">Ideas clave</option>
+                <option value="esquema">Esquema</option>
+                <option value="preguntas">Preguntas de repaso</option>
+                <option value="glosario">Glosario de términos</option>
+                <option value="tabla">Convertir en tabla</option>
+                <option value="formulas">Extraer fórmulas</option>
+                <option value="mapa">Mapa mental (hoja aparte)</option>
+                <option value="pasos">Pasos numerados</option>
+                <option value="ampliar">Ampliar con ejemplos</option>
+                <option value="simplificar">Explicar más simple</option>
+              </select>
+              <select id="selDonde" class="select-sm" title="Dónde se coloca el resultado">
+                <option value="reemplazar">Reemplazar lo seleccionado</option>
+                <option value="despues">Justo debajo</option>
+                <option value="final">Al final del documento</option>
+                <option value="hoja">En una hoja nueva</option>
+              </select>
+            </div>
+            <div class="rrow">
+              <button id="selAplicar" class="btn-primary sm">✦ Aplicar a lo seleccionado</button>
+              <button id="selDeshacer" class="btn-ghost sm" title="Deshacer">↶</button>
+            </div>
+            <div class="muted sm" id="selResultado"></div>
+          </div>
+          <div class="rg-title">Aplicar a una parte (qué, cómo y dónde)</div>
+        </div>
+        <div class="rgroup">
+          <div class="rg-body">
+            <textarea id="aiSmartInstr" class="ai-notes" placeholder="Opcional: cómo los quieres. Ej: 'para un examen oral', 'céntrate en fechas y nombres', 'con ejemplos prácticos', 'en inglés'"></textarea>
+            <div class="rrow">
+              <button id="aiSmartBtn" class="btn-primary sm" title="La IA lee el documento entero, decide qué estructura le conviene y escribe los apuntes">✨ Apuntes inteligentes</button>
+              <button id="aiSmartUndo" class="btn-ghost sm" title="Deshacer">↶</button>
+            </div>
+            <label class="muted sm chk" title="Un segundo modelo distinto revisa y corrige lo que escribió el primero. Tarda más pero sale más ordenado."><input type="checkbox" id="aiRevisar" checked> 🔍 Revisar con un segundo modelo</label>
+            <div class="muted sm" id="aiSmartState"></div>
+          </div>
+          <div class="rg-title">Leer documento con IA</div>
+        </div>
+        <div class="rgroup">
+          <div class="rg-body">
+            <textarea id="aiChat" class="ai-notes" placeholder="Pídele algo a la IA sobre el texto actual. Ej: 'hazlo más corto', 'agrega ejemplos', 'convierte en preguntas', 'traduce a inglés'"></textarea>
+            <div class="rrow">
+              <button id="aiChatBtn" class="btn-primary sm">✦ Aplicar al texto</button>
+              <button id="aiUndoBtn" class="btn-ghost sm" title="Deshacer el último cambio de la IA">↶</button>
+            </div>
+            <div class="muted sm" id="aiChatState"></div>
+          </div>
+          <div class="rg-title">Inteligencia artificial</div>
+        </div>
+        <div class="rgroup">
+          <div class="rg-body">
+            <label class="muted sm chk"><input type="checkbox" id="optMixLetter"> Mezclar fuentes DENTRO de cada palabra (letra a letra, armonizado)</label>
+            <span class="muted sm">Mantiene tamaño y tono uniformes en la palabra para que se vea natural, no disparejo.</span>
+          </div>
+          <div class="rg-title">Mezcla inteligente</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="gen-layout word-layout">
+      <aside class="gen-controls doc-panel" id="docPanel">
+        <div class="ctl-group">
+          <h4>Documento <button id="dockBtn" class="btn-ghost sm" title="Escribir sobre la hoja">📄 Sobre la hoja</button></h4>
+          <div id="dropzone" class="dropzone">
+            <b>⬇ Arrastra un archivo</b>
+            <span class="muted sm">PDF, Word, texto o imagen</span>
+          </div>
+          <textarea id="genText" rows="14" placeholder="Escribe aquí y se dibuja a mano en la hoja…  (clic en una palabra del papel para seleccionarla)"></textarea>
+          <div class="file-row">
+            <input type="file" id="docInput" accept=".txt,.md,.pdf,.docx,image/*">
+            <span class="muted sm" id="docStatus"></span>
+          </div>
+        </div>
+      </aside>
+      <div class="gen-preview" id="genPreview">
+        <div class="empty-preview" id="emptyPreview">
+          <div class="empty-ic">📝</div>
+          <p>Tus hojas aparecerán aquí.<br>Escribe en el panel izquierdo y se dibuja solo.</p>
+        </div>
+        <div id="pages"></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- toast -->
+<div id="toast" class="toast"></div>
+
+<!-- overlay for busy states -->
+<div id="overlay" class="overlay" hidden><div class="spinner"></div><div id="overlayMsg">Procesando…</div></div>
+
+<!-- ====================== SCRIPTS ====================== -->
+<script src="js/db.js?v=83"></script>
+<script src="js/charset.js?v=83"></script>
+<script src="js/libs.js?v=83"></script>
+<script src="js/fonts.js?v=83"></script>
+<script src="js/summarize.js?v=83"></script>
+<script src="js/ai.js?v=83"></script>
+<script src="js/segment.js?v=83"></script>
+<script src="js/render.js?v=83"></script>
+<script src="js/capture.js?v=83"></script>
+<script src="js/scan.js?v=83"></script>
+<script src="js/transcribe.js?v=83"></script>
+<script src="js/audio.js?v=83"></script>
+<script src="js/generate.js?v=83"></script>
+<script src="js/app.js?v=83"></script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+# Archivos del usuario usados para probar: NUNCA deben subirse al repo publico
+tmp/
+*.pdf
+*.docx
+!MEJORAS-FIRMA.md
+
+# Fotos de prueba
+sigtest/
+*.jpeg

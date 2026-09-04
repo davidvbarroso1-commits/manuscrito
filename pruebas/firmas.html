@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<title>Banco de pruebas — recorte de firmas</title>
+<style>
+  body{font:14px/1.5 system-ui,sans-serif;margin:0;padding:20px;background:#fafaf7;color:#22242a}
+  h1{font-size:20px;margin:0 0 4px} .sub{color:#666;margin:0 0 18px}
+  button{font:inherit;padding:7px 14px;border:1px solid #c8c8c0;border-radius:7px;background:#fff;cursor:pointer}
+  button.p{background:#1f3f8a;color:#fff;border-color:#1f3f8a}
+  table{border-collapse:collapse;width:100%;margin-top:16px;background:#fff}
+  th,td{border:1px solid #e2e2dc;padding:7px 9px;text-align:left;vertical-align:middle}
+  th{background:#f2f2ec;font-weight:600}
+  td.n{text-align:right;font-variant-numeric:tabular-nums}
+  .bien{color:#1a7a3c;font-weight:600} .mal{color:#b3261e;font-weight:600} .reg{color:#a06a00;font-weight:600}
+  canvas{border:1px solid #ddd;vertical-align:middle;background:
+    linear-gradient(45deg,#eee 25%,transparent 25%,transparent 75%,#eee 75%),
+    linear-gradient(45deg,#eee 25%,#fff 25%,#fff 75%,#eee 75%);
+    background-size:12px 12px;background-position:0 0,6px 6px}
+  #estado{margin:10px 0;color:#555}
+  .resumen{margin-top:18px;padding:12px 14px;background:#fff;border:1px solid #e2e2dc;border-radius:8px}
+</style></head><body>
+
+<h1>Banco de pruebas — recorte de firmas</h1>
+<p class="sub">Cada caso se genera con la tinta de la firma conocida aparte, así se puede medir
+qué porcentaje de la firma sobrevive (<b>conserva</b>) y qué porcentaje de lo conservado es
+realmente firma y no fondo (<b>limpieza</b>). Sin verdad conocida no se puede medir nada de esto.</p>
+
+<button id="run" class="p">▶ Ejecutar el banco</button>
+<button id="soloReales">Solo casos con color</button>
+<div id="estado"></div>
+<div id="resumen"></div>
+<table id="tabla"><thead><tr>
+  <th>Caso</th><th>Condición</th><th>Conserva</th><th>Limpieza</th><th>Nota</th><th>Escena</th><th>Recorte</th>
+</tr></thead><tbody></tbody></table>
+
+<script>
+/* En pruebas la cache es veneno: se cargan los js con marca de tiempo
+   para no medir nunca una version vieja (me paso tres veces). */
+const _V="?v="+Date.now();
+const _L=["libs", "fonts", "db", "charset", "render", "summarize", "ai", "segment", "capture", "scan", "transcribe", "audio", "generate", "app"];
+document.write(_L.map(n=>'<scr'+'ipt src="../js/'+n+'.js'+_V+'"><\/scr'+'ipt>').join(""));
+</script>
+<script>document.write('<scr'+'ipt src="casos.js'+_V+'"><\/scr'+'ipt>');</script>
+<script>
+/* La app espera su interfaz; aqui solo se usa el motor de recorte, asi que se
+   silencian los avisos y se crean al vuelo los controles que consulta.      */
+window.APP = window.APP || {}; APP.busy=()=>{}; APP.idle=()=>{}; APP.toast=()=>{};
+function control(id, tipo, valor, marcado){
+  let el=document.getElementById(id); if(el) return el;
+  el=document.createElement(tipo==='check'?'input':(tipo==='sel'?'select':'input'));
+  if(tipo==='check'){ el.type='checkbox'; el.checked=!!marcado; }
+  else { el.type='range'; el.value=valor; }
+  el.id=id; el.style.display='none'; document.body.appendChild(el); return el;
+}
+['sigThresh:50','sigQuitaNeutro:0','sigTolerancia:45','sigMinAlpha:0'].forEach(s=>{
+  const [id,v]=s.split(':'); control(id,'rango',v);
+});
+[['sigGrid',true],['sigColorSolo',true],['sigSoloPick',false],['sigAll',false]].forEach(([id,m])=>control(id,'check',0,m));
+
+const T=window.__MT;
+
+/* Mide el recorte contra la verdad. Se comparan en el sistema de coordenadas
+   de la ESCENA: el recorte sale ya recortado, asi que hay que localizarlo. */
+function mascara(canvas, umbralAlpha){
+  const {width:w,height:h}=canvas;
+  const d=canvas.getContext('2d',{willReadFrequently:true}).getImageData(0,0,w,h).data;
+  const m=new Uint8Array(w*h);
+  for(let p=0;p<w*h;p++) if(d[p*4+3]>umbralAlpha) m[p]=1;
+  return {m,w,h};
+}
+/* extractTight recorta ajustado a la tinta y ADEMAS reescala los recortes
+   pequenos, asi que no se puede mapear pixel a pixel contra la escena. Se
+   comparan las FORMAS: cada mascara se encuadra en su propia caja y se lleva
+   a una rejilla comun. Asi da igual el desplazamiento y la escala, y lo que
+   se mide es si la forma extraida es la firma o trae ademas otras cosas.  */
+function cajaDe(mk){
+  let x0=mk.w,y0=mk.h,x1=-1,y1=-1;
+  for(let y=0;y<mk.h;y++) for(let x=0;x<mk.w;x++) if(mk.m[y*mk.w+x]){
+    if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; }
+  if(x1<0) return null;
+  return {x0,y0,x1,y1,w:x1-x0+1,h:y1-y0+1};
+}
+function aRejilla(mk, N){
+  const c=cajaDe(mk); const g=new Uint8Array(N*N);
+  if(!c) return g;
+  for(let j2=0;j2<N;j2++) for(let i2=0;i2<N;i2++){
+    // se muestrea un bloque, no un punto: un trazo fino no se pierde entre pixeles
+    const ax=c.x0+Math.floor(i2*c.w/N), bx=c.x0+Math.max(1,Math.ceil((i2+1)*c.w/N));
+    const ay=c.y0+Math.floor(j2*c.h/N), by=c.y0+Math.max(1,Math.ceil((j2+1)*c.h/N));
+    let hay=0;
+    for(let y=ay;y<by&&!hay;y++) for(let x=ax;x<bx&&!hay;x++)
+      if(x<mk.w&&y<mk.h&&mk.m[y*mk.w+x]) hay=1;
+    g[j2*N+i2]=hay;
+  }
+  return g;
+}
+function puntua(recorte, tintaVerdad){
+  const N=128;
+  /* La verdad se toma en el NUCLEO del trazo (alpha>110). Con alpha>40 entraban
+     los bordes suavizados, que estan al 15% de opacidad y ningun umbralizador
+     conserva ni debe conservar: penalizaba un 20% sin que faltara nada. */
+  const V=aRejilla(mascara(tintaVerdad,110), N);
+  const R=aRejilla(mascara(recorte,60), N);
+  let acierto=0, falso=0, perdido=0;
+  for(let p=0;p<V.length;p++){
+    if(R[p]&&V[p]) acierto++;
+    else if(R[p]&&!V[p]) falso++;
+    else if(!R[p]&&V[p]) perdido++;
+  }
+  const conserva=(acierto+perdido)? acierto/(acierto+perdido) : 0;
+  const limpieza=(acierto+falso)? acierto/(acierto+falso) : 0;
+  return {conserva, limpieza, acierto, falso, perdido};
+}
+function clase(v){ return v>=0.85?'bien':(v>=0.6?'reg':'mal'); }
+function pct(v){ return Math.round(v*100)+'%'; }
+
+async function ejecuta(soloColor){
+  const tb=document.querySelector('#tabla tbody'); tb.innerHTML='';
+  document.getElementById('resumen').innerHTML='';
+  const W=520,H=340;
+  const filas=[];
+  for(const def of CASOS.DEFS){
+    if(soloColor && def.id==='lapiz-cuadricula') continue;
+    for(const deg of CASOS.DEGRADACIONES){
+      document.getElementById('estado').textContent='Probando '+def.nombre+' — '+deg.nombre+'…';
+      await new Promise(r=>setTimeout(r,0));
+      const {escena,tinta}=await CASOS.construye(def, deg.opt, W, H);
+      let res=null, err=null, recorte=null, caja=null;
+      try{
+        const img=await new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.src=escena.toDataURL('image/png');});
+        const seg=T.inkClusters(img);
+        const g=(seg&&seg.clusters[0])||{x0:0,y0:0,x1:W,y1:H};
+        const px=Math.max(8,(g.x1-g.x0)*0.10), pa=Math.max(px,(g.y1-g.y0)*0.30);
+        caja={x0:Math.max(0,g.x0-px), y0:Math.max(0,g.y0-pa),
+              x1:Math.min(W,g.x1+px), y1:Math.min(H,g.y1+px)};
+        const cc=document.createElement('canvas');
+        cc.width=Math.round(caja.x1-caja.x0); cc.height=Math.round(caja.y1-caja.y0);
+        cc.getContext('2d').drawImage(img, caja.x0, caja.y0, cc.width, cc.height, 0,0, cc.width, cc.height);
+        const crop=await new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.src=cc.toDataURL('image/png');});
+        const pz=T.extractTight(crop, 50);
+        recorte=pz.canvas;
+        res=puntua(recorte, tinta);
+      }catch(e){ err=String(e&&e.message||e); }
+
+      const tr=document.createElement('tr');
+      const mini=(c,alto)=>{ if(!c) return ''; const k=alto/c.height;
+        const d=document.createElement('canvas'); d.width=Math.round(c.width*k); d.height=alto;
+        d.getContext('2d').drawImage(c,0,0,d.width,d.height); return d; };
+      tr.innerHTML='<td>'+def.nombre+'</td><td>'+deg.nombre+'</td>'+
+        (err? '<td colspan="3" class="mal">'+err+'</td>'
+            : '<td class="n '+clase(res.conserva)+'">'+pct(res.conserva)+'</td>'+
+              '<td class="n '+clase(res.limpieza)+'">'+pct(res.limpieza)+'</td>'+
+              '<td>'+res.acierto+' ok / '+res.falso+' de mas / '+res.perdido+' perdido</td>')+
+        '<td class="e"></td><td class="r"></td>';
+      const ce=mini(escena,54), cr=mini(recorte,54);
+      if(ce) tr.querySelector('.e').appendChild(ce);
+      if(cr) tr.querySelector('.r').appendChild(cr);
+      tb.appendChild(tr);
+      if(res) filas.push({caso:def.nombre, cond:deg.nombre, ...res});
+    }
+  }
+  document.getElementById('estado').textContent='Listo: '+filas.length+' pruebas.';
+  if(filas.length){
+    const med=k=>filas.reduce((a,f)=>a+f[k],0)/filas.length;
+    const malos=filas.filter(f=>f.conserva<0.6||f.limpieza<0.6);
+    document.getElementById('resumen').innerHTML=
+      '<div class="resumen"><b>Media</b> — conserva '+pct(med('conserva'))+
+      ' · limpieza '+pct(med('limpieza'))+'<br><b>Casos flojos ('+malos.length+')</b>: '+
+      (malos.length? malos.map(m=>m.caso+' ['+m.cond+']').join(' · ') : 'ninguno')+'</div>';
+  }
+  window.__BANCO=filas;
+}
+document.getElementById('run').onclick=()=>ejecuta(false);
+document.getElementById('soloReales').onclick=()=>ejecuta(true);
+</script>
+</body></html>
