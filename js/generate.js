@@ -1682,6 +1682,35 @@ const GENERATE = (() => {
       if(bt>bv){ bv=bt; thr=t; } }
     thr=Math.max(22, Math.min(thr, 110));
 
+    /* NOTA — OTSU DE DOS NIVELES: probado y REVERTIDO, pero lo que dejo
+       averiguado importa mas que el propio intento.
+       El caso "azul sobre formulario" es el peor del banco (73/72) y se
+       comporta al reves de lo esperable: con la foto NITIDA sale 17/34 y con
+       las degradadas 97/91. La explicacion parecia clara: Otsu parte el
+       histograma en DOS clases y aqui hay TRES (papel, boligrafo, impreso),
+       asi que el corte cae entre lo impreso y el resto, y el boligrafo se
+       queda del lado del papel. En la foto sucia el ruido rellena el centro
+       del histograma y arrastra el umbral de 87 a 74, por debajo de la tinta.
+       Se implemento el segundo corte sobre la sub-poblacion de debajo. Hubo
+       que moverlo DESPUES de quitar la rejilla (antes veia los 17.700 px de
+       rayas impresas y no saltaba nunca) y bajar el suelo del segundo umbral
+       de 22 a 10 (se descartaba en silencio). Con eso ya se activa bien:
+         nitida        654 px -> 1307 px en 8 componentes
+         foto de movil 639 px -> 6916 px en 11 componentes
+       Y aun asi inkClusters SIGUE devolviendo null, y la media del banco no
+       se mueve: 80/81 antes y despues, con los 17 casos identicos.
+
+       LO QUE SE DESCUBRIO, que es el verdadero hallazgo:
+       en este caso lineasPeriodicas se come el 65% de la tinta, porque los
+       bordes del formulario son periodicos y la firma va pegada a ellos. Lo
+       que sobrevive se agrupa en una mancha de ~31x31 con fill=0,63, que
+       choca contra la guarda fill<0,55 del scoring, nadie puntua, y se
+       devuelve null. Es decir: TRES de las cuatro condiciones de este caso
+       nunca han pasado por el motor — el banco cae al recuadro de la imagen
+       entera y ese 73/72 es la nota del respaldo, no de un acierto.
+       Por ahi hay que atacar: o la rejilla no debe tocar los bordes de una
+       casilla (que son cuatro rectas, no una trama), o la guarda de fill
+       tiene que mirar la forma del trazo y no solo cuanto llena su caja.   */
     const ink=new Uint8Array(N);
     for(let y=sy0;y<=sy1;y++) for(let x=sx0;x<=sx1;x++){ const p=y*w+x; if(dist[p]>thr) ink[p]=1; }
 
@@ -1786,7 +1815,7 @@ const GENERATE = (() => {
       for(let p=0;p<N;p++) if(R.rej[p]) ink[p]=0;
       nInk=0; for(let p=0;p<N;p++) if(ink[p]) nInk++;
       anotaDiag('rejilla', 'periodo v='+R.periodoV+' h='+R.periodoH+
-                ' — quitados '+R.nr+' px ('+Math.round(R.nr/(R.nr+nInk)*100)+'% de la tinta)');
+                ' — quitados '+R.nr+' px, quedan '+nInk);
     }
     const crudos=blobs(ink,w,h,false,Math.max(8,Math.round(Ns*0.00004)));
     let comps=crudos.filter(filtroComp);
@@ -1806,7 +1835,15 @@ const GENERATE = (() => {
     }
     if(!comps.length) return null;
 
-    // agrupa trazos cercanos (union-find sobre cajas dilatadas)
+    /* Agrupa trazos cercanos (union-find sobre cajas dilatadas).
+       El emparejado es CUADRATICO, asi que con cientos de componentes la
+       pestana se cuelga — ya paso una vez con quitaRectas. Ninguna firma
+       tiene 400 trozos: si los hay, es texto impreso o ruido, y quedarse con
+       los mayores no pierde firma pero si evita la congelacion.            */
+    if(comps.length>400){
+      comps.sort((a,b)=>b.n-a.n); comps=comps.slice(0,400);
+      anotaDiag('recorteComps', 'habia demasiados componentes; me quedo con los 400 mayores');
+    }
     const gap=Math.max(3, diag*0.022), par=comps.map((_,i)=>i);
     const find=a=>{ while(par[a]!==a){ par[a]=par[par[a]]; a=par[a]; } return a; };
     for(let i=0;i<comps.length;i++) for(let j=i+1;j<comps.length;j++){
